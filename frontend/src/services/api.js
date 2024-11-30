@@ -71,11 +71,11 @@ export const removeObject = (image, mask=null, protection=null) => {
  * @param {string} method - The blending method (default is 'mix').
  * @returns {Promise} - The axios response promise.
  */
-export const blendImages = (source, mask, target, method = 'mix') => {
+export const blendImages = (source, mask, target, mood = 'Max') => {
   return axios.post(`${API_URL}/blend-images`, {
     "source": source,
     "mask": mask, 
     "target": target,
-    "method": method // import, mix, average, flatten
+    "mood": mood // Max, Average, Replace, Sum
   });
 };

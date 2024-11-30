@@ -184,7 +184,7 @@ const OptionsBar = memo(function OptionsBar({ selectedTool, onCreateMask,
           </Box>
         );
       case 'add':
-        const blendModes = ['import', 'mix', 'average', 'flatten'];
+        const blendModes = ['Max', 'Average', 'Replace', 'Sum'];
 
         return (
           <Box display="flex" alignItems="center" gap={1}>

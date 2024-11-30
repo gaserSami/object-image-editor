@@ -5,7 +5,7 @@ import cv2
 
 class PoissonService:
     @staticmethod
-    def blend_images(source_data, mask_data, target_data, method="import"):
+    def blend_images(source_data, mask_data, target_data, mood="Max"):
         """
         Blend source image into target image using Poisson blending
         
@@ -29,7 +29,7 @@ class PoissonService:
         _, mask = cv2.threshold(mask, 127, 255, cv2.THRESH_BINARY)
         
         try:
-            result = poisson_edit(source, target, mask)
+            result = poisson_edit(source, target, mask, mood)
             return result
             
         except Exception as e:

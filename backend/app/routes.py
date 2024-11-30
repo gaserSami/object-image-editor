@@ -170,12 +170,13 @@ def blend_images():
             source_data=data['source'],
             mask_data=data['mask'],
             target_data=data['target'],
-            method=data.get('method', 'import')
+            mood=data.get('mood', 'Mix')
         )
         
         return jsonify({
             "image": ImageUtils.encode_image(result)
         })
+    
     except Exception as e:
         error_trace = traceback.format_exc()
         logger.error(f"Error in blend_images: {str(e)}\n{error_trace}")

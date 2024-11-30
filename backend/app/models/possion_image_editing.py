@@ -21,7 +21,7 @@ def compute_backward_differences(img):
   
   return {'x': D_X, 'y': D_Y}
 
-def compute_mixed_DV(DG, DF, O):
+def compute_mixed_DV(DG, DF, O, mood="Max"): # Max, Sum, Average, Min, Replace
   """
   Compute mixed gradient vector field.
 
@@ -40,8 +40,21 @@ def compute_mixed_DV(DG, DF, O):
   O = np.roll(O, -1, axis=0) | np.roll(O, 1, axis=0) | np.roll(O, -1, axis=1) | np.roll(O, 1, axis=1)
   O = O[1:-1, 1:-1]
 
-  V_X[O] = np.where(np.abs(DF["x"][O]) > np.abs(DG["x"][O]), DF["x"][O], DG["x"][O])
-  V_Y[O] = np.where(np.abs(DF["y"][O]) > np.abs(DG["y"][O]), DF["y"][O], DG["y"][O])
+  if mood == "Replace":
+        V_X[O] = DG["x"][O]
+        V_Y[O] = DG["y"][O]
+  elif mood == "Average":
+      V_X[O] = 0.5 * (DG["x"][O] + DF["x"][O])
+      V_Y[O] = 0.5 * (DG["y"][O] + DF["y"][O])
+  elif mood == "Sum":
+      V_X[O] = DG["x"][O] + DF["x"][O]
+      V_Y[O] = DG["y"][O] + DF["y"][O]
+  elif mood == "Max":
+      V_X[O] = np.where(np.abs(DF["x"][O]) > np.abs(DG["x"][O]), DF["x"][O], DG["x"][O])
+      V_Y[O] = np.where(np.abs(DF["y"][O]) > np.abs(DG["y"][O]), DF["y"][O], DG["y"][O])
+  else:
+      raise ValueError("Mode Unknown")
+  
   return {'x': V_X, 'y': V_Y}
 
 def solve_poisson(V, O, F):
@@ -149,7 +162,7 @@ def solve_possion_channel(V_X, V_Y, O, F):
 
   return I
 
-def poisson_edit(G, F, O):
+def poisson_edit(G, F, O, mood):
   """
   Perform Poisson image editing.
 
@@ -171,7 +184,7 @@ def poisson_edit(G, F, O):
   # Main process
   DG = compute_backward_differences(G)
   DF = compute_backward_differences(F)
-  V = compute_mixed_DV(DG, DF, O.astype(bool))
+  V = compute_mixed_DV(DG, DF, O.astype(bool), mood)
   I = solve_poisson(V, O, F)
 
   return I
