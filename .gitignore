@@ -128,3 +128,28 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Logs and database files
+*.log
+*.sqlite3
+*.db
+
+# Cache and temporary files
+.cache/
+*.pyc
+*.pyo
+*.pyd
+
+# Packaging
+build/
+dist/
+*.egg-info/
+*.eggs/
+
+venv/
+
+testing/
