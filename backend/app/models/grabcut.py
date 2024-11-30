@@ -77,11 +77,6 @@ class GrabCutManager:
                 self.mask = mask
                 tempMask = np.where((mask == 1) + (mask == 3), 255, 0).astype('uint8')
 
-                # Save mask with timestamp
-                timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-                filename = f"mask_{timestamp}.png"
-                cv.imwrite(filename, tempMask)
-
                 # Initialize GrabCut with mask
                 cv.grabCut(self.img, mask, self.rect, self.bgdModel, self.fgdModel, iter, cv.GC_INIT_WITH_MASK)
             except Exception as e:
