@@ -129,7 +129,8 @@ const Canvas = memo(function Canvas({
   path,
   setPath,
   brushSize,
-  iterations
+  iterations,
+  setIsLoading,
 }) {
   const contextRef = useRef(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -195,8 +196,8 @@ const Canvas = memo(function Canvas({
 
     try {
       let response;
+      setIsLoading(true);
       if (path.length > 0) {
-        console.log('Refining selection with lasso path:', mask2dArr.src);
         response = await refineSelection(mask2dArr, iterations);
       } else {
         response = await selectObject(selectedLayer.imageUrl, rect, iterations);
@@ -205,6 +206,7 @@ const Canvas = memo(function Canvas({
       const tempPath = response.data["path"].map(point => ({ x: point[0], y: point[1] }));
       const maskArray = response.data["mask"];
       setMask2dArr(maskArray);
+      setIsLoading(false);
 
       // apply transformation to the path to go back to the original image space
       if(img){

@@ -21,7 +21,7 @@ function App() {
   const [retargetHeight, setRetargetHeight] = useState(0);
   const [sourceLayer, setSourceLayer] = useState(null);
   const [targetLayer, setTargetLayer] = useState(null);
-  const [blendMode, setBlendMode] = useState('mix');
+  const [blendMode, setBlendMode] = useState('Max');
   const [rightClickedLayerId, setRightClickedLayerId] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -349,6 +349,7 @@ function App() {
             setPath={setPath}
             brushSize={brushSize}
             iterations={iterations}
+            setIsLoading={setIsLoading}
           />
         </Box>
         <LayersPanel
