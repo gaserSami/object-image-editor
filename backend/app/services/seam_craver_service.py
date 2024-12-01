@@ -5,7 +5,7 @@ from app.models.seam_carving import remove, add_seams, remove_seams
 
 class SeamCarverService:
     @staticmethod
-    def resize_with_mask(image_data, new_height, new_width, protect_mask):
+    def resize_with_mask(image_data, new_height, new_width, protect_mask, forward=True):
         """
         Resize image using seam carving with optional protective mask.
         
@@ -39,10 +39,10 @@ class SeamCarverService:
             if dx != 0:
                 if dx < 0:
                     # Remove seams to decrease width
-                    output, _ = remove_seams(output, abs(dx), protect_mask)
+                    output, _ = remove_seams(output, abs(dx), protect_mask, forward=forward)
                 else:
                     # Add seams to increase width
-                    output, _ = add_seams(output, dx, protect_mask)
+                    output, _ = add_seams(output, dx, protect_mask, forward=forward)
                     
             # Handle height change by rotating image 90 degrees
             if dy != 0:
@@ -52,10 +52,10 @@ class SeamCarverService:
                 
                 if dy < 0:
                     # Remove seams to decrease height
-                    output, _ = remove_seams(output, abs(dy), protect_mask)
+                    output, _ = remove_seams(output, abs(dy), protect_mask, forward=forward)
                 else:
                     # Add seams to increase height
-                    output, _ = add_seams(output, dy, protect_mask)
+                    output, _ = add_seams(output, dy, protect_mask, forward=forward)
                     
                 # Rotate image back to original orientation
                 output = np.rot90(output, -1)
@@ -67,7 +67,7 @@ class SeamCarverService:
             return image
 
     @staticmethod
-    def remove_object(image_data, object_mask, protect_mask):
+    def remove_object(image_data, object_mask, protect_mask, forward=True):
         """
         Remove object from image using seam carving.
         
@@ -96,6 +96,6 @@ class SeamCarverService:
             protect_mask = protect_mask.astype(np.float64)
             
         # Perform object removal
-        output, _ = remove(image, remove_mask=object_mask, protect_mask=protect_mask)
+        output, _ = remove(image, remove_mask=object_mask, protect_mask=protect_mask, forward=forward)
         
         return output.astype(np.uint8)

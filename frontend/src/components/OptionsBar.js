@@ -1,5 +1,5 @@
 import React, { memo, useCallback } from 'react';
-import { Box, Slider, Typography, Button, IconButton, TextField, Select, MenuItem} from '@mui/material';
+import {Switch, Box, Slider, Typography, Button, IconButton, TextField, Select, MenuItem} from '@mui/material';
 import MoveIcon from '@mui/icons-material/OpenWith';
 import SelectIcon from '@mui/icons-material/SelectAll';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -22,7 +22,9 @@ const OptionsBar = memo(function OptionsBar({ selectedTool, onCreateMask,
   retargetHeight, onRetargetHeightChange,
   onBlend,
   blendMode,
-  setBlendMode
+  setBlendMode,
+  isForward,
+  setIsForward,
 }) {
   const getToolIcon = useCallback(() => {
     switch (selectedTool) {
@@ -174,6 +176,15 @@ const OptionsBar = memo(function OptionsBar({ selectedTool, onCreateMask,
           <Box display="flex" alignItems="center" gap={1}>
             <Typography variant="body2" sx={{ fontSize: '0.75rem' }}>
               Select your protection layer and mask layer then click to remove.
+            </Typography>
+            <Switch
+              checked={isForward}
+              onChange={(e) => setIsForward(e.target.checked)}
+              size="small"
+              color="primary"
+            />
+            <Typography variant="body2" sx={{ fontSize: '0.75rem' }}>
+              {isForward ? 'Forward' : 'Backward'} Energy
             </Typography>
             <Button
               variant="contained" color="primary" size="small" sx={{ fontSize: '0.5rem' }}
@@ -348,6 +359,15 @@ const OptionsBar = memo(function OptionsBar({ selectedTool, onCreateMask,
                 }}
               />
             </Box>
+            <Switch
+              checked={isForward}
+              onChange={(e) => setIsForward(e.target.checked)}
+              size="small"
+              color="primary"
+            />
+            <Typography variant="body2" sx={{ fontSize: '0.75rem' }}>
+              {isForward ? 'Forward' : 'Backward'} Energy
+            </Typography>
             <Button
               variant="contained"
               color="primary"

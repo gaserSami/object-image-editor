@@ -39,12 +39,13 @@ export const refineSelection = (mask, iter) => {
  * @param {object|null} protection - The protection data (optional).
  * @returns {Promise} - The axios response promise.
  */
-export const resizeImage = (image, height, width, protection = null) => {
+export const resizeImage = (image, height, width, protection = null, forward=true) => {
   return axios.post(`${API_URL}/resize-image`, {
     "image": image,
     "height": height,
     "width": width,
-    "protection" : protection
+    "protection" : protection,
+    "forward": forward
   });
 };
 
@@ -55,11 +56,12 @@ export const resizeImage = (image, height, width, protection = null) => {
  * @param {object|null} protection - The protection data (optional).
  * @returns {Promise} - The axios response promise.
  */
-export const removeObject = (image, mask=null, protection=null) => {
+export const removeObject = (image, mask=null, protection=null, forward=true) => {
   return axios.post(`${API_URL}/remove-object`, {
     "image": image,
     "mask": mask,
-    "protection": protection
+    "protection": protection,
+    "forward": forward
   });
 };
 

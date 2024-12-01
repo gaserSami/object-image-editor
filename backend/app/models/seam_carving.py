@@ -228,7 +228,7 @@ def insert_seam(img, path, boolean_path=None, protection_mask=None):
 
     return new_img, new_protection_mask
 
-def add_seams(img, num_seams=1, protect_mask=None):
+def add_seams(img, num_seams=1, protect_mask=None, forward=True):
     """
     Adds multiple seams to an image.
     
@@ -257,7 +257,7 @@ def add_seams(img, num_seams=1, protect_mask=None):
     tmp_idx_map = idx_map.copy()
     # Find and store all seams first
     for _ in range(num_seams):
-        cum_energyy, backtrack_path = cum_energy(gray, protect_mask=tmp_mask, forward=False)
+        cum_energyy, backtrack_path = cum_energy(gray, protect_mask=tmp_mask, forward=forward)
         boolean_path, coords_path = getMinPathMask(backtrack_path, cum_energyy)
         tmp_img, _, tmp_mask, tmp_idx_map = remove_path(tmp_img, 
                                             remove_mask=None,
@@ -302,7 +302,7 @@ def getMinPathMask(backtrack_path, cum_energy):
 
     return mask, path # boolean_path, coords_path
 
-def remove_seams(img, num_seams=0, protect_mask=None, remove_mask=None):
+def remove_seams(img, num_seams=0, protect_mask=None, remove_mask=None, forward=True):
     """
     Removes multiple seams from an image.
     
@@ -331,7 +331,7 @@ def remove_seams(img, num_seams=0, protect_mask=None, remove_mask=None):
     
     if num_seams == 0: 
         while np.any(curr_remove_mask):
-            cum_energyy, backtrack_path = cum_energy(gray, protect_mask=curr_protect_mask, remove_mask=curr_remove_mask)
+            cum_energyy, backtrack_path = cum_energy(gray, protect_mask=curr_protect_mask, remove_mask=curr_remove_mask, forward=forward)
             boolean_path, coords_path = getMinPathMask(backtrack_path, cum_energyy)
             new_img, curr_remove_mask, curr_protect_mask, _ = remove_path(new_img, 
                                                                     remove_mask=curr_remove_mask,
@@ -342,7 +342,7 @@ def remove_seams(img, num_seams=0, protect_mask=None, remove_mask=None):
             removed_seams.append(coords_path)
     else:
         for i in range(num_seams):
-            cum_energyy, backtrack_path = cum_energy(gray, protect_mask=curr_protect_mask, remove_mask=curr_remove_mask)
+            cum_energyy, backtrack_path = cum_energy(gray, protect_mask=curr_protect_mask, remove_mask=curr_remove_mask, forward=forward)
             boolean_path, coords_path = getMinPathMask(backtrack_path, cum_energyy)
             new_img, curr_remove_mask, curr_protect_mask, _ = remove_path(new_img, 
                                                                     remove_mask=curr_remove_mask,
@@ -358,7 +358,7 @@ def remove_seams(img, num_seams=0, protect_mask=None, remove_mask=None):
 # MAIN FUNCTIONS
 ########################################
 
-def remove(mainImg, remove_mask, protect_mask=None):
+def remove(mainImg, remove_mask, protect_mask=None, forward=True):
     """
     Main function to remove an object from an image using seam carving.
     
@@ -375,7 +375,7 @@ def remove(mainImg, remove_mask, protect_mask=None):
         mainImg = np.rot90(mainImg)
         remove_mask = np.rot90(remove_mask)
     
-    removed_img, removed_seams  = remove_seams(img = mainImg, remove_mask=remove_mask, protect_mask=protect_mask)
+    removed_img, removed_seams  = remove_seams(img = mainImg, remove_mask=remove_mask, protect_mask=protect_mask, forward=forward)
 
     if h < w:
         mainImg = np.rot90(mainImg, -1)

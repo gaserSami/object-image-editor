@@ -101,6 +101,7 @@ def resize_image():
             new_height=data['height'],
             new_width=data['width'],
             protect_mask=data['protection'],
+            forward=data['forward']
         )
         return jsonify({
                 "image": ImageUtils.encode_image(result)
@@ -131,7 +132,8 @@ def remove_object():
         result = SeamCarverService.remove_object(
             image_data=data['image'],
             object_mask=data['mask'],
-            protect_mask=data['protection']
+            protect_mask=data['protection'],
+            forward=data['forward']
         )
         
         return jsonify({

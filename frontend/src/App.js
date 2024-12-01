@@ -24,6 +24,7 @@ function App() {
   const [blendMode, setBlendMode] = useState('Max');
   const [rightClickedLayerId, setRightClickedLayerId] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isForward, setIsForward] = useState(true);
 
   const onBlend = useCallback(() => {
     setIsLoading(true);
@@ -102,7 +103,7 @@ function App() {
   const onRemove = useCallback(() => {
     setIsLoading(true);
     const selectedLayer = targetLayer;
-    removeObject(selectedLayer.imageUrl, maskLayer?.imageUrl, protectionLayer?.imageUrl)
+    removeObject(selectedLayer.imageUrl, maskLayer?.imageUrl, protectionLayer?.imageUrl, isForward)
       .then(res => {
         const img = new Image();
         img.onload = () => {
@@ -126,12 +127,12 @@ function App() {
         console.error(err);
         setIsLoading(false);
       });
-  }, [layers, maskLayer, protectionLayer, targetLayer]);
+  }, [layers, maskLayer, protectionLayer, targetLayer, isForward]);
 
   const onRetargetApply = useCallback(() => {
     setIsLoading(true);
     const selectedLayer = targetLayer;
-    resizeImage(selectedLayer.imageUrl, selectedLayer.image.height + (retargetHeight * selectedLayer.image.height / 100), selectedLayer.image.width + (retargetWidth * selectedLayer.image.width / 100), protectionLayer?.imageUrl)
+    resizeImage(selectedLayer.imageUrl, selectedLayer.image.height + (retargetHeight * selectedLayer.image.height / 100), selectedLayer.image.width + (retargetWidth * selectedLayer.image.width / 100), protectionLayer?.imageUrl, isForward)
       .then(res => {
         const img = new Image();
         img.onload = () => {
@@ -155,7 +156,7 @@ function App() {
         console.error(err);
         setIsLoading(false);
       });
-  }, [layers, maskLayer, protectionLayer, retargetHeight, retargetWidth, targetLayer]);
+  }, [layers, maskLayer, protectionLayer, retargetHeight, retargetWidth, targetLayer, isForward]);
 
   const onSelect = useCallback(() => {
     if (canvasRef.current?.onSelect) {
@@ -334,6 +335,8 @@ function App() {
         onBlend={onBlend}
         blendMode={blendMode}
         setBlendMode={setBlendMode}
+        setIsForward={setIsForward}
+        isForward={isForward}
       />
       <Box display="flex" height="calc(100vh - 88px)" bgcolor="background.default">
         <CustomToolbar onSelectTool={setSelectedTool} selectedTool={selectedTool}
