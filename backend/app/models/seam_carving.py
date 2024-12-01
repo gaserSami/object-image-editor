@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 
-FACTOR = 1200
+FACTOR = 1e4
 
 ########################################
 # UTILITY FUNCTIONS
@@ -52,7 +52,7 @@ def compute_energy(img):
     energy = np.abs(grad_x) + np.abs(grad_y)
     return energy
 
-def cum_energy(img, protect_mask=None, remove_mask=None):
+def cum_energy(img, protect_mask=None, remove_mask=None, forward=True):
     """
     Computes cumulative energy matrix using forward energy.
     
@@ -64,48 +64,84 @@ def cum_energy(img, protect_mask=None, remove_mask=None):
     Returns:
         tuple: (cumulative energy matrix, backtracking path matrix)
     """
-    energy = compute_energy(img) 
-    H, W = energy.shape
-    M = energy.copy()
-    backtrack_path = np.zeros((H, W), dtype=np.int32)
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) if len(img.shape) == 3 else img
+    if not forward:
+        energy = compute_energy(img) 
+        H, W = energy.shape
+        M = energy.copy()
+        backtrack_path = np.zeros((H, W), dtype=np.int32)
 
-    if protect_mask is None:
-        protect_mask = np.zeros((H, W), dtype=np.float64)
-    if remove_mask is None:
-        remove_mask = np.zeros((H, W), dtype=np.float64)
+        if protect_mask is None:
+            protect_mask = np.zeros((H, W), dtype=np.float64)
+        if remove_mask is None:
+            remove_mask = np.zeros((H, W), dtype=np.float64)
 
-    protect_mask = protect_mask.astype(np.float64) * FACTOR
-    remove_mask = remove_mask.astype(np.float64) * -FACTOR
+        protect_mask = protect_mask.astype(np.float64)
+        remove_mask = remove_mask.astype(np.float64)
 
-    U = np.roll(gray, 1, axis=0)
-    R = np.roll(gray,-1, axis=1)
-    L = np.roll(gray,1, axis=1)
-    CU = np.abs(R - L)
-    CL = CU + np.abs(U - L)
-    CR = CU + np.abs(U - R)
+        protect_mask *= FACTOR
+        remove_mask *= -FACTOR
 
-    M[0] = M[0] + protect_mask[0] + remove_mask[0]
+        energy += protect_mask + remove_mask
+        
+        for i in range(1, H):
+            prev_row = np.pad(M[i - 1], (1, 1), mode='constant', constant_values=np.inf)
+            left = prev_row[:-2]
+            center = prev_row[1:-1]
+            right = prev_row[2:]
+            lcr = np.array([left, center, right])
+            min_choices = np.argmin(lcr, axis=0) # 0 = left, 1 = center, 2 = right
+            backtrack_path[i] = min_choices - 1
+            M[i] += np.choose(min_choices, lcr)
 
-    for i in range(1, H):
-        MU = M[i - 1]
-        ML = np.roll(MU, 1)
-        MR = np.roll(MU, -1)
-        MU += CU[i]
-        ML += CL[i]
-        MR += CR[i]
+        return M, backtrack_path
+    else:
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) if len(img.shape) == 3 else img
+        gray_padded = np.pad(gray, pad_width=1, mode='edge')
+        H, W = gray.shape
+        backtrack_path = np.zeros((H, W), dtype=np.int32)
+        curr_r = gray_padded[0, 2:]
+        curr_l = gray_padded[0, :-2]
+        CU = np.abs(curr_r - curr_l)
+        M = np.zeros((H, W), dtype=np.float64)
+        M[0] = CU
 
-        MULR = np.array([ML, MU, MR])
-        backtrack_path[i] = np.argmin(MULR, axis=0)
-        M[i] = protect_mask[i] + remove_mask[i] + np.choose(backtrack_path[i], MULR)
-    
-    return M, backtrack_path - 1
+        if protect_mask is None:
+            protect_mask = np.zeros((H, W), dtype=np.float64)
+        if remove_mask is None:
+            remove_mask = np.zeros((H, W), dtype=np.float64)
+
+        protect_mask = protect_mask.astype(np.float64)
+        remove_mask = remove_mask.astype(np.float64)
+
+        protect_mask *= FACTOR
+        remove_mask *= -FACTOR
+
+        M[0] = M[0] + protect_mask[0] + remove_mask[0]
+
+        for i in range(1, H):
+            curr_r = gray_padded[i, 2:]
+            curr_l = gray_padded[i, :-2]
+            CU = np.abs(curr_r - curr_l)
+            prev_row_U = gray[i - 1]
+            CL = np.abs(prev_row_U - curr_l) + CU
+            CR = np.abs(prev_row_U - curr_r) + CU
+            prev_row = np.pad(M[i - 1], (1, 1), mode='constant', constant_values=np.inf)
+            left = prev_row[:-2]
+            center = prev_row[1:-1]
+            right = prev_row[2:]
+            lcr = np.array([left, center, right])
+            lcr += np.array([CL, CU, CR])
+            min_choices = np.argmin(lcr, axis=0) # 0 = left, 1 = center, 2 = right
+            backtrack_path[i] = min_choices - 1
+            M[i] += np.choose(min_choices, lcr) + protect_mask[i] + remove_mask[i]
+        
+        return M, backtrack_path
 
 ########################################
 # SEAM FUNCTIONS
 ########################################
 
-def remove_path(img, path, boolean_path=None, remove_mask=None, protection_mask=None):
+def remove_path(img, path, boolean_path=None, remove_mask=None, protection_mask=None, idx_map=None):
     """
     Removes a seam path from an image and updates associated masks.
     
@@ -124,11 +160,14 @@ def remove_path(img, path, boolean_path=None, remove_mask=None, protection_mask=
     new_img = np.zeros((H, W - 1, C), dtype=np.float64)
     new_remove_mask = None 
     new_protection_mask = None
+    new_idx_map = None
     
     if remove_mask is not None:
         new_remove_mask = np.zeros((H, W - 1), dtype=np.float64)
     if protection_mask is not None:
         new_protection_mask = np.zeros((H, W - 1), dtype=np.float64)
+    if idx_map is not None:
+        new_idx_map = np.zeros((H, W - 1), dtype=np.int32)
 
     for y, x in path:
         new_img[y, :x, :] = img[y, :x, :]
@@ -139,8 +178,11 @@ def remove_path(img, path, boolean_path=None, remove_mask=None, protection_mask=
         if protection_mask is not None:
             new_protection_mask[y, :x] = protection_mask[y, :x]
             new_protection_mask[y, x:] = protection_mask[y, x+1:]
+        if idx_map is not None:
+            new_idx_map[y, :x] = idx_map[y, :x]
+            new_idx_map[y, x:] = idx_map[y, x+1:]
 
-    return new_img, new_remove_mask, new_protection_mask
+    return new_img, new_remove_mask, new_protection_mask, new_idx_map
 
 
 def insert_seam(img, path, boolean_path=None, protection_mask=None):
@@ -199,19 +241,35 @@ def add_seams(img, num_seams=1, protect_mask=None):
         tuple: (image with added seams, updated protection mask)
     """
     new_img = img.copy()
+    if len(img.shape) == 3:
+        gray = cv2.cvtColor(img.astype(np.uint8), cv2.COLOR_BGR2GRAY)
+    else:
+        gray = img.copy()
+
     new_mask = protect_mask.copy() if protect_mask is not None else None
 
     # Store seams and their insertion positions
-    removed_seams = []
     tmp_img = img.copy()
     tmp_mask = protect_mask.copy() if protect_mask is not None else np.zeros((img.shape[0], img.shape[1]), dtype=np.float64)
-    
+    H,W = tmp_img.shape[:2]
+    removed_seams = []
+    idx_map = np.tile(np.arange(W), (H, 1))
+    tmp_idx_map = idx_map.copy()
     # Find and store all seams first
-    for i in range(num_seams):
-        cum_energyy, backtrack_path = cum_energy(tmp_img, protect_mask=tmp_mask)
+    for _ in range(num_seams):
+        cum_energyy, backtrack_path = cum_energy(gray, protect_mask=tmp_mask, forward=False)
         boolean_path, coords_path = getMinPathMask(backtrack_path, cum_energyy)
-        tmp_mask += boolean_path.astype(np.float64)
-        removed_seams.append(coords_path)
+        tmp_img, _, tmp_mask, tmp_idx_map = remove_path(tmp_img, 
+                                            remove_mask=None,
+                                            protection_mask=tmp_mask, 
+                                            boolean_path=boolean_path,
+                                            path=coords_path,
+                                            idx_map=tmp_idx_map
+                                            )
+        updated_path = coords_path.copy()
+        updated_path[:, 1] = idx_map[coords_path[:, 0], coords_path[:, 1]]
+        gray = cv2.cvtColor(tmp_img.astype(np.uint8), cv2.COLOR_BGR2GRAY)
+        removed_seams.append(updated_path)
 
     # Insert the seams
     for seam in removed_seams:
@@ -275,7 +333,7 @@ def remove_seams(img, num_seams=0, protect_mask=None, remove_mask=None):
         while np.any(curr_remove_mask):
             cum_energyy, backtrack_path = cum_energy(gray, protect_mask=curr_protect_mask, remove_mask=curr_remove_mask)
             boolean_path, coords_path = getMinPathMask(backtrack_path, cum_energyy)
-            new_img, curr_remove_mask, curr_protect_mask = remove_path(new_img, 
+            new_img, curr_remove_mask, curr_protect_mask, _ = remove_path(new_img, 
                                                                     remove_mask=curr_remove_mask,
                                                                     protection_mask=curr_protect_mask, 
                                                                     boolean_path=boolean_path,
@@ -286,7 +344,7 @@ def remove_seams(img, num_seams=0, protect_mask=None, remove_mask=None):
         for i in range(num_seams):
             cum_energyy, backtrack_path = cum_energy(gray, protect_mask=curr_protect_mask, remove_mask=curr_remove_mask)
             boolean_path, coords_path = getMinPathMask(backtrack_path, cum_energyy)
-            new_img, curr_remove_mask, curr_protect_mask = remove_path(new_img, 
+            new_img, curr_remove_mask, curr_protect_mask, _ = remove_path(new_img, 
                                                                     remove_mask=curr_remove_mask,
                                                                     protection_mask=curr_protect_mask, 
                                                                     boolean_path=boolean_path,
