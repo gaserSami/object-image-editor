@@ -101,7 +101,7 @@ function App() {
 
   const onRemove = useCallback(() => {
     setIsLoading(true);
-    const selectedLayer = layers.find(layer => layer.id === selectedLayerId);
+    const selectedLayer = targetLayer;
     removeObject(selectedLayer.imageUrl, maskLayer?.imageUrl, protectionLayer?.imageUrl)
       .then(res => {
         const img = new Image();
@@ -126,11 +126,11 @@ function App() {
         console.error(err);
         setIsLoading(false);
       });
-  }, [layers, maskLayer, protectionLayer, selectedLayerId]);
+  }, [layers, maskLayer, protectionLayer, targetLayer]);
 
   const onRetargetApply = useCallback(() => {
     setIsLoading(true);
-    const selectedLayer = layers.find(layer => layer.id === selectedLayerId);
+    const selectedLayer = targetLayer;
     resizeImage(selectedLayer.imageUrl, selectedLayer.image.height + (retargetHeight * selectedLayer.image.height / 100), selectedLayer.image.width + (retargetWidth * selectedLayer.image.width / 100), protectionLayer?.imageUrl)
       .then(res => {
         const img = new Image();
@@ -155,7 +155,7 @@ function App() {
         console.error(err);
         setIsLoading(false);
       });
-  }, [layers, maskLayer, protectionLayer, retargetHeight, retargetWidth]);
+  }, [layers, maskLayer, protectionLayer, retargetHeight, retargetWidth, targetLayer]);
 
   const onSelect = useCallback(() => {
     if (canvasRef.current?.onSelect) {
