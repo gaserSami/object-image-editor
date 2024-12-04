@@ -1,5 +1,5 @@
 import React, { memo, useCallback } from 'react';
-import {Switch, Box, Slider, Typography, Button, IconButton, TextField, Select, MenuItem} from '@mui/material';
+import { Switch, Box, Slider, Typography, Button, IconButton, TextField, Select, MenuItem } from '@mui/material';
 import MoveIcon from '@mui/icons-material/OpenWith';
 import SelectIcon from '@mui/icons-material/SelectAll';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -25,6 +25,7 @@ const OptionsBar = memo(function OptionsBar({ selectedTool, onCreateMask,
   setBlendMode,
   isForward,
   setIsForward,
+  onAddPathOffset
 }) {
   const getToolIcon = useCallback(() => {
     switch (selectedTool) {
@@ -156,6 +157,18 @@ const OptionsBar = memo(function OptionsBar({ selectedTool, onCreateMask,
               variant="contained"
             >
               Select
+            </Button>
+
+            <Button
+              onClick={() => onAddPathOffset()}
+              sx={{
+                color: 'white',
+                fontSize: '0.5rem'
+              }}
+              size="small"
+              variant="contained"
+            >
+              Add Offset
             </Button>
 
             <Button

@@ -26,6 +26,30 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [isForward, setIsForward] = useState(true);
 
+  const onAddPathOffset = (offset = 0.5) => {
+    setPath(prevPath => {
+      // Find center point
+      const center = prevPath.reduce((acc, point) => ({
+        x: acc.x + point.x / prevPath.length,
+        y: acc.y + point.y / prevPath.length
+      }), { x: 0, y: 0 });
+  
+      // Add offset in direction from center
+      return prevPath.map(point => {
+        const dx = point.x - center.x;
+        const dy = point.y - center.y;
+        const length = Math.sqrt(dx * dx + dy * dy);
+        const nx = dx / length; // normalized direction
+        const ny = dy / length;
+        
+        return {
+          x: point.x + nx * offset,
+          y: point.y + ny * offset
+        };
+      });
+    });
+  };
+
   const onBlend = useCallback(() => {
     setIsLoading(true);
     // Create temporary canvas at the same size as the main canvas
@@ -337,6 +361,7 @@ function App() {
         setBlendMode={setBlendMode}
         setIsForward={setIsForward}
         isForward={isForward}
+        onAddPathOffset={onAddPathOffset}
       />
       <Box display="flex" height="calc(100vh - 88px)" bgcolor="background.default">
         <CustomToolbar onSelectTool={setSelectedTool} selectedTool={selectedTool}
