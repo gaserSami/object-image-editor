@@ -1,4 +1,5 @@
 from flask import request, jsonify
+from app.services.inpainting_service import InpaintingService
 from app.services.image_service import ImageService
 from app.services.seam_craver_service import SeamCarverService
 from app.services.poisson_service import PoissonService
@@ -182,6 +183,44 @@ def blend_images():
     except Exception as e:
         error_trace = traceback.format_exc()
         logger.error(f"Error in blend_images: {str(e)}\n{error_trace}")
+        return jsonify({
+            'error': str(e),
+            'traceback': error_trace
+        }), 500
+    
+@app.route('/inpaint-image', methods=['POST'])
+def inpaint_image():
+    """
+    Endpoint to inpaint an image using exemplar-based method.
+    
+    Request JSON:
+    {
+        "image": <image_data>,
+        "mask": <mask_data>,
+        "patch_size": <patch_size>  # optional, default 9
+    }
+    
+    Response JSON:
+    {
+        "image": <inpainted_image_data>
+    }
+    """
+    data = request.json
+    
+    try:
+        result = InpaintingService.inpaint_image(
+            image_data=data['image'],
+            mask_data=data['mask'],
+            patch_size=data.get('patch_size', 9)
+        )
+        
+        return jsonify({
+            "image": ImageUtils.encode_image(result)
+        })
+    
+    except Exception as e:
+        error_trace = traceback.format_exc()
+        logger.error(f"Error in inpaint_image: {str(e)}\n{error_trace}")
         return jsonify({
             'error': str(e),
             'traceback': error_trace

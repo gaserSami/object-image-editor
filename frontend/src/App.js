@@ -5,7 +5,7 @@ import Canvas from './components/Canvas';
 import CustomToolbar from './components/CustomToolbar';
 import ImageEditorMenuBar from './components/ImageEditorMenuBar';
 import LayersPanel from './components/LayersPanel';
-import { removeObject, resizeImage, blendImages } from './services/api';
+import { removeObject, resizeImage, blendImages , inpaintImage} from './services/api';
 
 function App() {
   const canvasRef = useRef(null);
@@ -49,6 +49,35 @@ function App() {
       });
     });
   };
+
+  const onInpaint = useCallback(() => {
+    setIsLoading(true);
+    const selectedLayer = targetLayer;
+    inpaintImage(selectedLayer.imageUrl, maskLayer.imageUrl)
+      .then(res => {
+        const img = new Image();
+        img.onload = () => {
+          const newLayer = {
+            id: Date.now(),
+            image: img,
+            imageUrl: res.data.image,
+            visible: true,
+            x: 0,
+            y: 0,
+            scale: 1,
+            rotation: 0
+          };
+          setLayers([...layers, newLayer]);
+          setSelectedLayerId(newLayer.id);
+          setIsLoading(false);
+        };
+        img.src = res.data.image;
+      })
+      .catch(err => {
+        console.error(err);
+        setIsLoading(false);
+      });
+  }, [layers, maskLayer, targetLayer]);
 
   const onBlend = useCallback(() => {
     setIsLoading(true);
@@ -362,6 +391,7 @@ function App() {
         setIsForward={setIsForward}
         isForward={isForward}
         onAddPathOffset={onAddPathOffset}
+        onHeal={onInpaint}
       />
       <Box display="flex" height="calc(100vh - 88px)" bgcolor="background.default">
         <CustomToolbar onSelectTool={setSelectedTool} selectedTool={selectedTool}

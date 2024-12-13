@@ -81,3 +81,18 @@ export const blendImages = (source, mask, target, mood = 'Max') => {
     "mood": mood // Max, Average, Replace, Sum
   });
 };
+
+/**
+ * Inpaint an image using exemplar-based method.
+ * @param {string} image - The image data.
+ * @param {string} mask - The mask data.
+ * @param {number} patchSize - The patch size (optional, default 9).
+ * @returns {Promise} - The axios response promise.
+ */
+export const inpaintImage = (image, mask, patchSize = 9) => {
+  return axios.post(`${API_URL}/inpaint-image`, {
+    "image": image,
+    "mask": mask,
+    "patch_size": patchSize
+  });
+};

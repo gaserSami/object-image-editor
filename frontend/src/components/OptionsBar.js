@@ -25,7 +25,8 @@ const OptionsBar = memo(function OptionsBar({ selectedTool, onCreateMask,
   setBlendMode,
   isForward,
   setIsForward,
-  onAddPathOffset
+  onAddPathOffset,
+  onHeal
 }) {
   const getToolIcon = useCallback(() => {
     switch (selectedTool) {
@@ -392,24 +393,26 @@ const OptionsBar = memo(function OptionsBar({ selectedTool, onCreateMask,
             </Button>
           </Box>
         );
-      case 'heal':
-        return (
-          <Box display="flex" alignItems="center" gap={1}>
-            <Typography variant="body2" sx={{ fontSize: '0.75rem' }}>Heal Radius:</Typography>
-            <Slider
-              defaultValue={20}
-              min={5}
-              max={50}
-              size="small"
-              sx={{
-                width: 60,
-                color: '#90caf9',
-                padding: '5px 0'
-              }}
-              aria-label="heal radius"
-            />
-          </Box>
-        );
+          case 'heal':
+          return (
+            <Box display="flex" flexDirection="row" gap={1} p={1} justifyContent={'center'} alignItems={'center'}>
+              <Typography variant="body2" sx={{ fontSize: '0.75rem' }}>
+                First select the mask area, then select the target area to heal from
+              </Typography>
+              <Button
+                variant="contained"
+                color="primary"
+                size="small"
+                onClick={onHeal}
+                sx={{
+                  color: 'white',
+                  fontSize: '0.5rem'
+                }}
+              >
+                Apply Healing
+              </Button>
+            </Box>
+          );
       case 'brush':
         return (
           <Box display="flex" alignItems="center" gap={1}>
