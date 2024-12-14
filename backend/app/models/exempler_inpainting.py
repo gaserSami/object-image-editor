@@ -20,7 +20,7 @@ class Inpainter:
         self.omega_3D = omega
         self.half_size = patch_size // 2
         self.tmp_boundary_confidence = None
-        
+
         # Performance tracking
         self.timing_stats = {
             'compute_fill_front': [],
@@ -178,8 +178,10 @@ class Inpainter:
 
     def initialize(self):
         """Prepare data structures for inpainting"""
+        # binarize the omega_3D
+        self.omega_3D = (self.omega_3D > 0).astype(np.float64)
         # Normalize and convert data types
-        self.omega_3D = self.omega_3D.astype(np.float64) / 255
+        self.omega_3D = self.omega_3D.astype(np.float64)
         self.mask_3D = 1 - self.omega_3D
         
         # Calculate source region (non-masked areas)
@@ -228,11 +230,12 @@ class Inpainter:
         roi_width = max_x - min_x
         
         # Compute confidence term only for ROI
-        center = self.patch_size // 2
-        indices = np.arange(self.patch_size)
-        dist_matrix = np.abs(indices[:, None] - center) + np.abs(indices - center)
-        dist_matrix = dist_matrix / 6
-        kernel = dist_matrix
+        # center = self.patch_size // 2
+        # indices = np.arange(self.patch_size)
+        # dist_matrix = np.abs(indices[:, None] - center) + np.abs(indices - center)
+        # dist_matrix = dist_matrix / 6
+        # kernel = dist_matrix
+        kernel = np.ones((self.patch_size, self.patch_size))
         
         roi_confidence = self.confidence[min_y:max_y, min_x:max_x]
         roi_fill_front = self.fill_front[min_y:max_y, min_x:max_x]
@@ -285,11 +288,11 @@ class Inpainter:
         data_term = np.abs(dot_product) / 255.0
         
         # Initialize full priority matrix
-        self.priority.fill(0)
+        self.priority.fill(-1)
         
         # Update only the ROI in the priority matrix
         roi_priority = data_term * boundary_confidence
-        roi_priority = np.where(roi_fill_front, roi_priority, 0)
+        roi_priority = np.where(roi_fill_front, roi_priority, -1)
         self.priority[min_y:max_y, min_x:max_x] = roi_priority
 
     def find_max_prio_patch(self):
@@ -380,8 +383,6 @@ class Inpainter:
         start_time = time.time()
         while np.any(self.omega_3D):
             # DEBUGGING: TO REMOVE
-            print(f"omega_3D is any? : {np.any(self.omega_3D)}")
-            print(f"sum of omega_3D: {np.sum(self.omega_3D)}")
             t0 = time.time()
             self.compute_fill_front()
             self.timing_stats['compute_fill_front'].append(time.time() - t0)
@@ -419,7 +420,7 @@ class Inpainter:
                     avg_time = sum(times[-to_save_after_each:]) / min(to_save_after_each, len(times))
                     print(f"{func}: {avg_time:.4f}s per iteration")
 
-        cv2.imwrite(f"inpainted_image_final.jpg", (self.image).astype(np.uint8))
+        cv2.imwrite(f"tmp/inpainted_image_final.jpg", (self.image).astype(np.uint8))
         end_time = time.time()
         print(f"\nTotal time taken for inpainting: {end_time - start_time:.2f} seconds")
         
