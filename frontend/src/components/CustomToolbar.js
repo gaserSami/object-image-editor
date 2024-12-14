@@ -23,15 +23,13 @@ const CustomToolbar = memo(function CustomToolbar({ onSelectTool, selectedTool }
     { id: 'select', icon: SelectIcon, tooltip: 'Object Selection' },
     { id: 'remove', icon: DeleteIcon, tooltip: 'Remove Object' },
     { id: 'add', icon: AddIcon, tooltip: 'Add Object' },
+    { id: 'retarget', icon: AutoFixHighIcon, tooltip: 'Retarget' },
+    { id: 'heal', icon: HealingIcon, tooltip: 'Healing' },
     { id: 'move', icon: MoveIcon, tooltip: 'Move' },
     { id: 'duplicate', icon: FileCopyIcon, tooltip: 'Duplicate' },
     { id: 'scale', icon: ZoomOutMapIcon, tooltip: 'Scale' },
     { id: 'color', icon: ColorLensIcon, tooltip: 'Change Color' },
-    { id: 'retarget', icon: AutoFixHighIcon, tooltip: 'Retarget' },
-    { id: 'heal', icon: HealingIcon, tooltip: 'Healing' },
     { id: 'crop', icon: CropIcon, tooltip: 'Crop' },
-    { id: 'rotate', icon: RotateRightIcon, tooltip: 'Rotate' },
-    { id: 'text', icon: TextFieldsIcon, tooltip: 'Text' },
   ];
 
   const buttonStyle = useCallback(

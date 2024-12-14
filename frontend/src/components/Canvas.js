@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
-import { Box } from '@mui/material';
+import { Box, Snackbar, Alert } from '@mui/material';
 import { selectObject, refineSelection } from '../services/api';
 
 const handleSize = 8;
@@ -146,16 +146,32 @@ const Canvas = memo(function Canvas({
   const [isDrawingIndicators, setIsDrawingIndicators] = useState(false);
   const [drawingType, setDrawingType] = useState(null); // null, 0, or 1 for drawing type
   const [isDrawing, setIsDrawing] = useState(false);
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState('');
 
   const onRectTool = useCallback(() => {
     setIsDrawingRect(true);
   }, []);
 
   const onSelect = useCallback(async () => {
-    if (!selectedLayerId) return;
+    if (!selectedLayerId) {
+      setSnackbarMessage("Cannot select: No selected layer");
+      setSnackbarOpen(true);
+      return;
+    }
 
     const selectedLayer = layers.find(layer => layer.id === selectedLayerId);
-    if (!selectedLayer) return;
+    if (!selectedLayer) {
+      setSnackbarMessage("Cannot select: No selected layer. There was issue while getting the layer.");
+      setSnackbarOpen(true);
+      return;
+    }
+
+    if(!rectStart && !path.length > 0){
+      setSnackbarMessage("Cannot enhance selection. Please use Intial Selection tool to create a selection first.");
+      setSnackbarOpen(true);
+      return;
+    }
 
     let rect;
     let img = selectedLayer.image;
@@ -228,22 +244,35 @@ const Canvas = memo(function Canvas({
       setRectEnd(null);
       setIsDrawingRect(false);
     } catch (error) {
-      console.error('Selection failed:', error);
+      setSnackbarMessage("Selection failed. Please try again.");
+      setSnackbarOpen(true);
+      setIsLoading(false);
     }
   }, [selectedLayerId, rectStart, rectEnd, layers, iterations, mask2dArr, path, setPath]);
 
   const onResetIndicators = useCallback(() => {
-    setIndicators([]);
+    if(indicators.length > 0){
+      setIndicators([]);
+    }else{
+      setSnackbarMessage("There are no indicators to reset.");
+      setSnackbarOpen(true);
+    }
   }, []);
+
+  const handleSnackbarClose = () => {
+    setSnackbarOpen(false);
+  };
 
   const handleCreateMask = useCallback(() => {
     if (!selectedLayerId || !path || path.length < 3) {
-      console.log("Cannot create mask: No selection or invalid path");
+      setSnackbarMessage("Cannot create mask: No selection or invalid path");
+      setSnackbarOpen(true);
       return;
     }
     const selectedLayer = layers.find(layer => layer.id === selectedLayerId);
     if (!selectedLayer) {
-      console.log("Cannot create mask: No selected layer");
+      setSnackbarMessage("Cannot create mask: No selected layer");
+      setSnackbarOpen(true);
       return;
     }
 
@@ -667,6 +696,16 @@ const Canvas = memo(function Canvas({
           cursor: isDrawingIndicators ? 'default' : selectedTool === 'pointer' ? 'move' : 'crosshair'
         }}
       />
+      <Snackbar
+        open={snackbarOpen}
+        autoHideDuration={6000}
+        onClose={handleSnackbarClose}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={handleSnackbarClose} severity="error" sx={{ width: '100%' }}>
+          {snackbarMessage}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 });

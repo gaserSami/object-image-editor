@@ -34,14 +34,14 @@ const OptionsBar = memo(function OptionsBar({ selectedTool, onCreateMask,
       case "lasso": return <RoundedCornerIcon fontSize="small" />;
       case 'select': return <SelectIcon fontSize="small" />;
       case 'remove': return <DeleteIcon fontSize="small" />;
-      case 'cut': return <ContentCutIcon fontSize="small" />;
       case 'add': return <AddIcon fontSize="small" />;
+      case 'retarget': return <AutoFixHighIcon fontSize="small" />;
+      case 'heal': return <HealingIcon fontSize="small" />;
+      case 'cut': return <ContentCutIcon fontSize="small" />;
       case 'move': return <MoveIcon fontSize="small" />;
       case 'duplicate': return <FileCopyIcon fontSize="small" />;
       case 'scale': return <ZoomOutMapIcon fontSize="small" />;
       case 'color': return <ColorLensIcon fontSize="small" />;
-      case 'retarget': return <AutoFixHighIcon fontSize="small" />;
-      case 'heal': return <HealingIcon fontSize="small" />;
       default: return null;
     }
   }, [selectedTool]);
@@ -55,14 +55,14 @@ const OptionsBar = memo(function OptionsBar({ selectedTool, onCreateMask,
       case 'pointer':
         return (
           <Typography variant="body2" sx={{ fontSize: '0.75rem' }}>
-            Click and drag to move objects.
+            Click and drag to move the image.
           </Typography>
         );
       case "lasso":
         return (
           <Box display="flex" alignItems="center" gap={1}>
             <Typography variant="body2" sx={{ fontSize: '0.75rem' }}>
-              {"Draw selection freely"}
+              {"Select layer then draw selection freely."}
             </Typography>
             <Button
               onClick={() => onCreateMask()}  // Ensure this calls the handler
@@ -81,20 +81,8 @@ const OptionsBar = memo(function OptionsBar({ selectedTool, onCreateMask,
         return (
           <Box display="flex" alignItems="center" gap={1}>
             <Typography variant="body2" sx={{ fontSize: '0.75rem' }}>
-              {"Click to select objects"}
+              {"Select layer then start selection."}
             </Typography>
-
-            <Button
-              onClick={() => onCreateMask()}
-              sx={{
-                color: 'white',
-                fontSize: '0.5rem'
-              }}
-              size="small"
-              variant="contained"
-            >
-              Create Mask
-            </Button>
 
             <Button
               onClick={() => onRectTool()}
@@ -105,7 +93,7 @@ const OptionsBar = memo(function OptionsBar({ selectedTool, onCreateMask,
               size="small"
               variant="contained"
             >
-              Rectangle
+              Intial Selection
             </Button>
 
             <Box display="flex" alignItems="center" width={150}>
@@ -157,7 +145,7 @@ const OptionsBar = memo(function OptionsBar({ selectedTool, onCreateMask,
               size="small"
               variant="contained"
             >
-              Select
+              Enhance Selection
             </Button>
 
             <Button
@@ -183,13 +171,26 @@ const OptionsBar = memo(function OptionsBar({ selectedTool, onCreateMask,
             >
               Reset Indictors
             </Button>
+
+            <Button
+              onClick={() => onCreateMask()}
+              sx={{
+                color: 'white',
+                fontSize: '0.5rem'
+              }}
+              size="small"
+              variant="contained"
+            >
+              Create Mask
+            </Button>
+
           </Box>
         );
       case 'remove':
         return (
           <Box display="flex" alignItems="center" gap={1}>
             <Typography variant="body2" sx={{ fontSize: '0.75rem' }}>
-              Select your protection layer and mask layer then click to remove.
+              Select your target layer, protection layer and mask layer then click to remove.
             </Typography>
             <Switch
               checked={isForward}

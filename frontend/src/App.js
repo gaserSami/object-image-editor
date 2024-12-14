@@ -1,5 +1,5 @@
 import React, { useCallback, useState, useRef } from 'react';
-import { CssBaseline, Box , CircularProgress} from '@mui/material';
+import { CssBaseline, Box , CircularProgress, Snackbar, Alert} from '@mui/material';
 import OptionsBar from './components/OptionsBar';
 import Canvas from './components/Canvas';
 import CustomToolbar from './components/CustomToolbar';
@@ -25,8 +25,20 @@ function App() {
   const [rightClickedLayerId, setRightClickedLayerId] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isForward, setIsForward] = useState(true);
+  const [snackbarMessage, setSnackbarMessage] = useState("");
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
+
+  const handleSnackbarClose = () => {
+    setSnackbarOpen(false);
+  };
 
   const onAddPathOffset = (offset = 0.5) => {
+    if(!path.length > 0){
+      setSnackbarMessage("There is no selection to add offset to.");
+      setSnackbarOpen(true);
+      return;
+    }
+
     setPath(prevPath => {
       // Find center point
       const center = prevPath.reduce((acc, point) => ({
@@ -80,6 +92,21 @@ function App() {
   }, [layers, maskLayer, targetLayer]);
 
   const onBlend = useCallback(() => {
+    if(!targetLayer){
+      setSnackbarMessage("Please select target layer before blending.");
+      setSnackbarOpen(true);
+      return;
+    }
+    if(!sourceLayer){
+      setSnackbarMessage("Please select source layer before blending.");
+      setSnackbarOpen(true);
+      return;
+    }
+    if(!maskLayer){
+      setSnackbarMessage("Please select mask layer before blending.");
+      setSnackbarOpen(true);
+      return;
+    }
     setIsLoading(true);
     // Create temporary canvas at the same size as the main canvas
     const tempCanvas = document.createElement('canvas');
@@ -147,13 +174,24 @@ function App() {
         img.src = res.data.image;
       })
       .catch(err => {
-        console.error('Blend failed:', err);
+        setSnackbarMessage("Blend failed. Please try again.");
+        setSnackbarOpen(true);
         setIsLoading(false);
       });
 
-  }, [targetLayer, maskLayer, sourceLayer, setLayers, blendMode]);
+  }, [targetLayer, maskLayer, sourceLayer, setLayers, blendMode, setIsLoading]);
 
   const onRemove = useCallback(() => {
+    if(!targetLayer){
+      setSnackbarMessage("Please select target layer before removing.");
+      setSnackbarOpen(true);
+      return;
+    }
+    if(!maskLayer){
+      setSnackbarMessage("Please select mask layer before removing.");
+      setSnackbarOpen(true);
+      return;
+    }
     setIsLoading(true);
     const selectedLayer = targetLayer;
     removeObject(selectedLayer.imageUrl, maskLayer?.imageUrl, protectionLayer?.imageUrl, isForward)
@@ -177,10 +215,11 @@ function App() {
         img.src = res.data.image;
       })
       .catch(err => {
-        console.error(err);
+        setSnackbarMessage("Remove failed. Please try again.");
+        setSnackbarOpen(true);
         setIsLoading(false);
       });
-  }, [layers, maskLayer, protectionLayer, targetLayer, isForward]);
+  }, [layers, maskLayer, protectionLayer, targetLayer, isForward, setLayers, setSelectedLayerId, setIsLoading]);
 
   const onRetargetApply = useCallback(() => {
     setIsLoading(true);
@@ -431,6 +470,16 @@ function App() {
           setRightClickedLayerId={setRightClickedLayerId}
         />
       </Box>
+      <Snackbar
+        open={snackbarOpen}
+        autoHideDuration={6000}
+        onClose={handleSnackbarClose}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={handleSnackbarClose} severity="error" sx={{ width: '100%' }}>
+          {snackbarMessage}
+        </Alert>
+      </Snackbar>
     </>
   );
 }
