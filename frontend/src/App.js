@@ -1,5 +1,5 @@
 import React, { useCallback, useState, useRef } from 'react';
-import { CssBaseline, Box , CircularProgress, Snackbar, Alert} from '@mui/material';
+import { CssBaseline, Box , CircularProgress, Snackbar, Alert, Dialog, DialogTitle, DialogContent, DialogActions, Button, Select, MenuItem, FormControl, InputLabel, Typography} from '@mui/material';
 import OptionsBar from './components/OptionsBar';
 import Canvas from './components/Canvas';
 import CustomToolbar from './components/CustomToolbar';
@@ -27,6 +27,9 @@ function App() {
   const [isForward, setIsForward] = useState(true);
   const [snackbarMessage, setSnackbarMessage] = useState("");
   const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [addLayerDialogOpen, setAddLayerDialogOpen] = useState(false);
+  const [layerType, setLayerType] = useState('image');
+  const [parentLayerId, setParentLayerId] = useState(null);
 
   const handleSnackbarClose = () => {
     setSnackbarOpen(false);
@@ -63,6 +66,16 @@ function App() {
   };
 
   const onInpaint = useCallback(() => {
+    if(!targetLayer){
+      setSnackbarMessage("Please select target layer before inpainting.");
+      setSnackbarOpen(true);
+      return;
+    }
+    if(!maskLayer){
+      setSnackbarMessage("Please select mask layer before inpainting.");
+      setSnackbarOpen(true);
+      return;
+    }
     setIsLoading(true);
     const selectedLayer = targetLayer;
     inpaintImage(selectedLayer.imageUrl, maskLayer.imageUrl)
@@ -86,10 +99,16 @@ function App() {
         img.src = res.data.image;
       })
       .catch(err => {
-        console.error(err);
+        setSnackbarMessage("Inpainting failed. Please try again.");
+        setSnackbarOpen(true);
         setIsLoading(false);
       });
-  }, [layers, maskLayer, targetLayer]);
+  }, [layers, maskLayer, targetLayer, setLayers, setSelectedLayerId, setIsLoading]);
+
+  const onHealAI = useCallback(() => {
+    console.log("Heal with AI");
+    // TODO: Implement AI heal
+  }, []);
 
   const onBlend = useCallback(() => {
     if(!targetLayer){
@@ -222,6 +241,17 @@ function App() {
   }, [layers, maskLayer, protectionLayer, targetLayer, isForward, setLayers, setSelectedLayerId, setIsLoading]);
 
   const onRetargetApply = useCallback(() => {
+    if(!targetLayer){
+      setSnackbarMessage("Please select target layer before retargeting.");
+      setSnackbarOpen(true);
+      return;
+    }
+    if(retargetHeight === 0 && retargetWidth === 0){
+      setSnackbarMessage("Please enter a valid retarget height and width.");
+      setSnackbarOpen(true);
+      return;
+    }
+    
     setIsLoading(true);
     const selectedLayer = targetLayer;
     resizeImage(selectedLayer.imageUrl, selectedLayer.image.height + (retargetHeight * selectedLayer.image.height / 100), selectedLayer.image.width + (retargetWidth * selectedLayer.image.width / 100), protectionLayer?.imageUrl, isForward)
@@ -245,10 +275,11 @@ function App() {
         img.src = res.data.image;
       })
       .catch(err => {
-        console.error(err);
+        setSnackbarMessage("Retarget failed. Please try again.");
+        setSnackbarOpen(true);
         setIsLoading(false);
       });
-  }, [layers, maskLayer, protectionLayer, retargetHeight, retargetWidth, targetLayer, isForward]);
+  }, [layers, maskLayer, protectionLayer, retargetHeight, retargetWidth, targetLayer, isForward, setLayers, setSelectedLayerId, setIsLoading]);
 
   const onSelect = useCallback(() => {
     if (canvasRef.current?.onSelect) {
@@ -276,10 +307,18 @@ function App() {
 
   const handleApplyMask = useCallback((maskLayerId) => {
     const maskLayer = layers.find(layer => layer.id === maskLayerId);
-    if (!maskLayer || maskLayer.type !== 'mask') return;
+    if (!maskLayer || maskLayer.type !== 'mask') {
+      setSnackbarMessage("Selected layer is not a mask.");
+      setSnackbarOpen(true);
+      return;
+    }
 
     const parentLayer = layers.find(layer => layer.id === maskLayer.parentLayerId);
-    if (!parentLayer) return;
+    if (!parentLayer) {
+      setSnackbarMessage("No parent layer found for the mask.");
+      setSnackbarOpen(true);
+      return;
+    }
 
     if (canvasRef.current?.handleApplyMask) {
       canvasRef.current.handleApplyMask(maskLayer, parentLayer);
@@ -287,6 +326,16 @@ function App() {
   }, [layers]);
 
   const handleAddLayer = useCallback(() => {
+    setAddLayerDialogOpen(true);
+  }, []);
+
+  const handleAddLayerConfirm = useCallback(() => {
+    if (layerType === 'mask' && layers.length === 0) {
+      setSnackbarMessage("No parent layers available to create a mask.");
+      setSnackbarOpen(true);
+      return;
+    }
+
     const fileInput = document.createElement('input');
     fileInput.type = 'file';
     fileInput.accept = 'image/*';
@@ -305,7 +354,9 @@ function App() {
               x: 0,
               y: 0,
               scale: 1,
-              rotation: 0
+              rotation: 0,
+              type: layerType,
+              parentLayerId: layerType === 'mask' ? parentLayerId : null
             };
             setLayers(prev => [...prev, newLayer]);
             setSelectedLayerId(newLayer.id);
@@ -316,7 +367,8 @@ function App() {
       }
     };
     fileInput.click();
-  }, []);
+    setAddLayerDialogOpen(false);
+  }, [layerType, parentLayerId, layers]);
 
   const handleToggleVisibility = useCallback((layerId) => {
     setLayers(prev =>
@@ -340,7 +392,11 @@ function App() {
       layer.parentLayerId === rightClickedLayerId
     );
   
-    if (maskLayers.length < 2) return; // Need at least 2 masks to merge
+    if (maskLayers.length < 2) {
+      setSnackbarMessage("There are less than 2 masks to merge.");
+      setSnackbarOpen(true);
+      return;
+    } // Need at least 2 masks to merge
   
     // Create a temporary canvas for merging
     const mergeCanvas = document.createElement('canvas');
@@ -431,6 +487,7 @@ function App() {
         isForward={isForward}
         onAddPathOffset={onAddPathOffset}
         onHeal={onInpaint}
+        onHealAI={onHealAI}
       />
       <Box display="flex" height="calc(100vh - 88px)" bgcolor="background.default">
         <CustomToolbar onSelectTool={setSelectedTool} selectedTool={selectedTool}
@@ -480,6 +537,54 @@ function App() {
           {snackbarMessage}
         </Alert>
       </Snackbar>
+      <Dialog
+        open={addLayerDialogOpen}
+        onClose={() => setAddLayerDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle sx={{ bgcolor: '#333', color: '#fff' }}>Add Layer</DialogTitle>
+        <DialogContent sx={{ bgcolor: '#2b2b2b', color: '#fff' }}>
+          <FormControl fullWidth margin="normal">
+            <InputLabel sx={{ color: '#fff' }}>Type</InputLabel>
+            <Select
+              value={layerType}
+              onChange={(e) => setLayerType(e.target.value)}
+              sx={{ color: '#fff', '.MuiSelect-icon': { color: '#fff' } }}
+            >
+              <MenuItem value="image">Image</MenuItem>
+              <MenuItem value="mask">Mask</MenuItem>
+            </Select>
+          </FormControl>
+          {layerType === 'mask' && layers.length > 0 && (
+            <FormControl fullWidth margin="normal">
+              <InputLabel sx={{ color: '#fff' }}>Parent Layer</InputLabel>
+              <Select
+                value={parentLayerId}
+                onChange={(e) => setParentLayerId(e.target.value)}
+                sx={{ color: '#fff', '.MuiSelect-icon': { color: '#fff' } }}
+              >
+                {layers
+                  .filter(layer => layer.type !== 'mask')
+                  .map((layer, index) => (
+                    <MenuItem key={layer.id} value={layer.id}>
+                      {`Layer ${index + 1}`}
+                    </MenuItem>
+                  ))}
+              </Select>
+            </FormControl>
+          )}
+          {layerType === 'mask' && layers.length === 0 && (
+            <Typography variant="body2" sx={{ color: '#f48fb1', mt: 2 }}>
+              No parent layers available to create a mask.
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ bgcolor: '#333' }}>
+          <Button onClick={() => setAddLayerDialogOpen(false)} sx={{ color: '#fff' }}>Cancel</Button>
+          <Button onClick={handleAddLayerConfirm} color="primary" sx={{ color: '#fff' }}>Add</Button>
+        </DialogActions>
+      </Dialog>
     </>
   );
 }

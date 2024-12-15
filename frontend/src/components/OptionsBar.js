@@ -26,7 +26,8 @@ const OptionsBar = memo(function OptionsBar({ selectedTool, onCreateMask,
   isForward,
   setIsForward,
   onAddPathOffset,
-  onHeal
+  onHeal,
+  onHealAI
 }) {
   const getToolIcon = useCallback(() => {
     switch (selectedTool) {
@@ -294,7 +295,7 @@ const OptionsBar = memo(function OptionsBar({ selectedTool, onCreateMask,
         return (
           <Box display="flex" alignItems="center" gap={1}>
             <Typography variant="body2" sx={{ fontSize: '0.75rem' }}>
-              Adjust selected image:
+              Adjust target image and optionally select protection layer:
             </Typography>
             <Box display="flex" alignItems="center" gap={1}>
               <Typography variant="caption">Width %:</Typography>
@@ -305,8 +306,8 @@ const OptionsBar = memo(function OptionsBar({ selectedTool, onCreateMask,
                 onChange={(e) => { onRetargetWidthChange(e.target.value) }}
                 InputProps={{
                   inputProps: {
-                    min: -100,
-                    max: 100,
+                    min: -80,
+                    max: 80,
                   },
                   sx: {
                     color: 'white',
@@ -398,7 +399,7 @@ const OptionsBar = memo(function OptionsBar({ selectedTool, onCreateMask,
           return (
             <Box display="flex" flexDirection="row" gap={1} p={1} justifyContent={'center'} alignItems={'center'}>
               <Typography variant="body2" sx={{ fontSize: '0.75rem' }}>
-                First select the mask area, then select the target area to heal from
+                Select target layer and mask layer then click to heal.
               </Typography>
               <Button
                 variant="contained"
@@ -411,6 +412,31 @@ const OptionsBar = memo(function OptionsBar({ selectedTool, onCreateMask,
                 }}
               >
                 Apply Healing
+              </Button>
+              <Button
+                variant="contained"
+                size="small"
+                onClick={() => {onHealAI()}}
+                startIcon={<AutoFixHighIcon />}
+                sx={{
+                  fontSize: '0.5rem',
+                  background: 'linear-gradient(45deg, #FF8E53 30%, #FE6B8B 90%)',
+                  border: 0,
+                  boxShadow: '0 3px 5px 2px rgba(255, 105, 135, .3)',
+                  color: 'white',
+                  '&:hover': {
+                    background: 'linear-gradient(45deg, #FE6B8B 30%, #FF8E53 90%)',
+                    boxShadow: '0 3px 7px 2px rgba(255, 105, 135, .5)',
+                  },
+                  animation: 'glowing 1.5s infinite',
+                  '@keyframes glowing': {
+                    '0%': { boxShadow: '0 0 5px #FF8E53' },
+                    '50%': { boxShadow: '0 0 20px #FE6B8B' },
+                    '100%': { boxShadow: '0 0 5px #FF8E53' }
+                  }
+                }}
+              >
+                Heal with AI
               </Button>
             </Box>
           );

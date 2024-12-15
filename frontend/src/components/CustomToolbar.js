@@ -32,6 +32,8 @@ const CustomToolbar = memo(function CustomToolbar({ onSelectTool, selectedTool }
     { id: 'crop', icon: CropIcon, tooltip: 'Crop' },
   ];
 
+  const disabledTools = ['move', 'duplicate', 'scale', 'color', 'crop'];
+
   const buttonStyle = useCallback(
     (tool) => ({
       color: selectedTool === tool ? '#90caf9' : 'white',
@@ -61,8 +63,9 @@ const CustomToolbar = memo(function CustomToolbar({ onSelectTool, selectedTool }
         <React.Fragment key={tool.id}>
           <Tooltip title={tool.tooltip} placement="right">
             <IconButton
-              onClick={() => handleToolClick(tool.id)}
+              onClick={disabledTools.includes(tool.id) ? null : () => handleToolClick(tool.id)}
               sx={buttonStyle(tool.id)}
+              disabled={disabledTools.includes(tool.id)}
             >
               <tool.icon fontSize="small" />
             </IconButton>
