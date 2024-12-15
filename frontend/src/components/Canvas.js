@@ -53,7 +53,7 @@ const drawLayers = (ctx, canvas, layers) => {
     ctx.save();
     ctx.translate(layer.x, layer.y);
     ctx.rotate(layer.rotation * Math.PI / 180);
-    ctx.scale(layer.scale, layer.scale);
+    ctx.scale(layer.scaleX || layer.scale, layer.scaleY || layer.scale);
     ctx.drawImage(layer.image, -layer.image.width / 2, -layer.image.height / 2);
     ctx.restore();
   });
@@ -89,8 +89,10 @@ const drawLassoPath = (ctx, path) => {
 
 const getTransformHandles = (layer) => {
   if (!layer || !layer.image.src) return;
-  const width = layer.image.width * layer.scale;
-  const height = layer.image.height * layer.scale;
+  const scaleX = layer.scaleX || layer.scale;
+  const scaleY = layer.scaleY || layer.scale;
+  const width = layer.image.width * scaleX;
+  const height = layer.image.height * scaleY;
   const x = layer.x;
   const y = layer.y;
   return [
@@ -98,6 +100,10 @@ const getTransformHandles = (layer) => {
     { id: 'ne', x: x + width / 2, y: y - height / 2 },
     { id: 'se', x: x + width / 2, y: y + height / 2 },
     { id: 'sw', x: x - width / 2, y: y + height / 2 },
+    { id: 'n', x: x, y: y - height / 2 },
+    { id: 's', x: x, y: y + height / 2 },
+    { id: 'e', x: x + width / 2, y: y },
+    { id: 'w', x: x - width / 2, y: y },
     { id: 'rotate', x: x, y: y - height / 2 - 20 }
   ];
 };
@@ -598,11 +604,28 @@ const Canvas = memo(function Canvas({
             ? { ...layer, rotation: angle * (180 / Math.PI) }
             : layer
         ));
+      } else if (['n', 's'].includes(transformHandle)) {
+        // Vertical scaling
+        const scaleY = Math.max(0.1, (selectedLayer.scaleY || selectedLayer.scale) * (1 + dy / 100));
+        setLayers(prev => prev.map(layer =>
+          layer.id === selectedLayerId
+            ? { ...layer, scaleY }
+            : layer
+        ));
+      } else if (['e', 'w'].includes(transformHandle)) {
+        // Horizontal scaling
+        const scaleX = Math.max(0.1, (selectedLayer.scaleX || selectedLayer.scale) * (1 + dx / 100));
+        setLayers(prev => prev.map(layer =>
+          layer.id === selectedLayerId
+            ? { ...layer, scaleX }
+            : layer
+        ));
       } else {
+        // Uniform scaling for corner handles
         const scale = Math.max(0.1, selectedLayer.scale * (1 + (dx + dy) / 100));
         setLayers(prev => prev.map(layer =>
           layer.id === selectedLayerId
-            ? { ...layer, scale }
+            ? { ...layer, scale, scaleX: scale, scaleY: scale }
             : layer
         ));
       }
