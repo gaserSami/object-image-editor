@@ -1,4 +1,5 @@
 from flask import request, jsonify
+from app.services.dnn_service import DNNService
 from app.services.inpainting_service import InpaintingService
 from app.services.image_service import ImageService
 from app.services.seam_craver_service import SeamCarverService
@@ -221,6 +222,44 @@ def inpaint_image():
     except Exception as e:
         error_trace = traceback.format_exc()
         logger.error(f"Error in inpaint_image: {str(e)}\n{error_trace}")
+        return jsonify({
+            'error': str(e),
+            'traceback': error_trace
+        }), 500
+    
+@app.route('/inpaint-dnn', methods=['POST'])
+def inpaint_dnn():
+    """
+    Endpoint to inpaint an image using the DNN model.
+    
+    Request JSON:
+    {
+        "image": <image_data>,
+        "mask": <mask_data>
+    }
+    
+    Response JSON:
+    {
+        "image": <inpainted_image_data>
+    }
+    """
+    data = request.json
+    
+    try:
+        # Get the DNNService instance first
+        dnn_service = DNNService.get_instance()
+        result = dnn_service.inpaint_with_dnn(
+            image_data=data['image'],
+            mask_data=data['mask']
+        )
+        
+        return jsonify({
+            "image": ImageUtils.encode_image(result)
+        })
+    
+    except Exception as e:
+        error_trace = traceback.format_exc()
+        logger.error(f"Error in inpaint_dnn: {str(e)}\n{error_trace}")
         return jsonify({
             'error': str(e),
             'traceback': error_trace
