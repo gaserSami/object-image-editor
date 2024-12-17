@@ -96,3 +96,17 @@ export const inpaintImage = (image, mask, patchSize = 9) => {
     "patch_size": patchSize
   });
 };
+
+/**
+ * Inpaint an image using the DNN model.
+ * @param {string} image - The image data.
+ * @param {string} mask - The mask data.
+ * @returns {Promise} - The axios response promise.
+ */
+export const inpaintDNN = (image, mask) => {
+  return axios.post(`${API_URL}/inpaint-dnn`, {
+    "image": image,
+    "mask": mask
+  });
+};
+

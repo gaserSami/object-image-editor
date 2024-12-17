@@ -5,7 +5,7 @@ import Canvas from './components/Canvas';
 import CustomToolbar from './components/CustomToolbar';
 import ImageEditorMenuBar from './components/ImageEditorMenuBar';
 import LayersPanel from './components/LayersPanel';
-import { removeObject, resizeImage, blendImages , inpaintImage} from './services/api';
+import { removeObject, resizeImage, blendImages , inpaintImage, inpaintDNN} from './services/api';
 
 function App() {
   const canvasRef = useRef(null);
@@ -106,9 +106,44 @@ function App() {
   }, [layers, maskLayer, targetLayer, setLayers, setSelectedLayerId, setIsLoading]);
 
   const onHealAI = useCallback(() => {
-    console.log("Heal with AI");
-    // TODO: Implement AI heal
-  }, []);
+    if(!targetLayer){
+      setSnackbarMessage("Please select target layer before healing.");
+      setSnackbarOpen(true);
+      return;
+    }
+    if(!maskLayer){
+      setSnackbarMessage("Please select mask layer before healing.");
+      setSnackbarOpen(true);
+      return;
+    }
+    setIsLoading(true);
+    const selectedLayer = targetLayer;
+    inpaintDNN(selectedLayer.imageUrl, maskLayer.imageUrl)
+      .then(res => {
+        const img = new Image();
+        img.onload = () => {
+          const newLayer = {
+            id: Date.now(),
+            image: img,
+            imageUrl: res.data.image,
+            visible: true,
+            x: 0,
+            y: 0,
+            scale: 1,
+            rotation: 0
+          };
+          setLayers([...layers, newLayer]);
+          setSelectedLayerId(newLayer.id);
+          setIsLoading(false);
+        };
+        img.src = res.data.image;
+      })
+      .catch(err => {
+        setSnackbarMessage("AI healing failed. Please try again.");
+        setSnackbarOpen(true);
+        setIsLoading(false);
+      });
+  }, [layers, maskLayer, targetLayer, setLayers, setSelectedLayerId, setIsLoading]);
 
   const onBlend = useCallback(() => {
     if(!targetLayer){
