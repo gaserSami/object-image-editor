@@ -360,6 +360,12 @@ function App() {
     }
   }, []);
 
+  const saveCanvasAsJpeg = useCallback(() => {
+    if (canvasRef.current?.saveCanvasAsJpeg) {
+      canvasRef.current.saveCanvasAsJpeg();
+    }
+  }, [layers, selectedLayerId]);
+
   const handleApplyMask = useCallback((maskLayerId) => {
     const maskLayer = layers.find(layer => layer.id === maskLayerId);
     if (!maskLayer || maskLayer.type !== 'mask') {
@@ -539,6 +545,7 @@ function App() {
       <ImageEditorMenuBar
         layers={layers}
         selectedLayerId={selectedLayerId}
+        saveCanvasAsJpeg={saveCanvasAsJpeg}
       />
       <OptionsBar
         selectedTool={selectedTool}

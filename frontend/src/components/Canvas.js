@@ -892,6 +892,85 @@ const Canvas = memo(function Canvas({
     return points;
   };
 
+  const saveCanvasAsJpeg = useCallback(() => {
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    
+    // Create a temporary canvas to draw all content
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = canvas.width;
+    tempCanvas.height = canvas.height;
+    const tempCtx = tempCanvas.getContext('2d');
+    
+    // Draw all layers and content
+    drawLayers(tempCtx, tempCanvas, layers);
+    drawIndicators(tempCtx, indicators, brushSize);
+    if (path.length > 0) {
+      drawLassoPath(tempCtx, path);
+    }
+    
+    // Get the image data to find bounds of content
+    const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+    const bounds = {
+      left: tempCanvas.width,
+      right: 0,
+      top: tempCanvas.height,
+      bottom: 0
+    };
+
+    // Scan for non-transparent pixels
+    for (let y = 0; y < tempCanvas.height; y++) {
+      for (let x = 0; x < tempCanvas.width; x++) {
+        const idx = (y * tempCanvas.width + x) * 4;
+        const alpha = imageData.data[idx + 3];
+        if (alpha > 0) {
+          bounds.left = Math.min(bounds.left, x);
+          bounds.right = Math.max(bounds.right, x);
+          bounds.top = Math.min(bounds.top, y);
+          bounds.bottom = Math.max(bounds.bottom, y);
+        }
+      }
+    }
+
+    // Add padding
+    const padding = 0;
+    bounds.left = Math.max(0, bounds.left - padding);
+    bounds.top = Math.max(0, bounds.top - padding);
+    bounds.right = Math.min(tempCanvas.width, bounds.right + padding);
+    bounds.bottom = Math.min(tempCanvas.height, bounds.bottom + padding);
+
+    // Create final canvas with only the content
+    const finalCanvas = document.createElement('canvas');
+    finalCanvas.width = bounds.right - bounds.left;
+    finalCanvas.height = bounds.bottom - bounds.top;
+    const finalCtx = finalCanvas.getContext('2d');
+
+    // Draw the cropped region
+    finalCtx.drawImage(
+      tempCanvas,
+      bounds.left, bounds.top,
+      bounds.right - bounds.left, bounds.bottom - bounds.top,
+      0, 0,
+      bounds.right - bounds.left, bounds.bottom - bounds.top
+    );
+
+    // Create download link
+    const link = document.createElement('a');
+    link.download = 'canvas-export.jpg';
+    link.href = finalCanvas.toDataURL('image/jpeg', 0.8);
+    link.click();
+  }, [layers, indicators, brushSize, path]);
+
+  // Add to useEffect to expose the function
+  useEffect(() => {
+    canvasRef.current.handleApplyMask = handleApplyMask;
+    canvasRef.current.handleCreateMask = handleCreateMask;
+    canvasRef.current.onRectTool = onRectTool;
+    canvasRef.current.onSelect = onSelect;
+    canvasRef.current.onResetIndicators = onResetIndicators;
+    canvasRef.current.saveCanvasAsJpeg = saveCanvasAsJpeg;
+  }, [handleApplyMask, handleCreateMask, onRectTool, onSelect, onResetIndicators, saveCanvasAsJpeg]);
+
   return (
     <Box sx={{ flex: 1, position: 'relative', overflow: 'hidden', bgcolor: '#1e1e1e' }}>
       <canvas

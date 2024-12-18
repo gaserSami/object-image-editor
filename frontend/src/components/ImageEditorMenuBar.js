@@ -6,7 +6,7 @@ import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 
 const MENU_ITEMS = {
-  file: ['New', 'Open', 'Save', 'Export as PNG', 'Export as JPG'],
+  file: ['New', 'Open', 'Save', 'Export as PNG', 'Export as JPG', 'Export Canvas'],
   edit: ['Undo', 'Redo'],
   image: ['Adjustments', 'Resize'],
   layer: ['New Layer', 'Delete Layer'],
@@ -31,7 +31,7 @@ const exportImage = (layers, selectedLayerId, format) => {
   link.click();
 };
 
-const MenuButton = memo(({ label, onClick }) => (
+const MenuButton = memo(({ label, onClick}) => (
   <Button
     onClick={onClick}
     sx={{
@@ -46,7 +46,7 @@ const MenuButton = memo(({ label, onClick }) => (
   </Button>
 ));
 
-const CustomMenu = memo(({ items, anchorEl, onClose, onExport }) => (
+const CustomMenu = memo(({ items, anchorEl, onClose, onExport, saveCanvasAsJpeg }) => (
   <Menu
     anchorEl={anchorEl}
     open={Boolean(anchorEl)}
@@ -63,6 +63,8 @@ const CustomMenu = memo(({ items, anchorEl, onClose, onExport }) => (
             onExport('PNG');
           } else if (item === 'Export as JPG') {
             onExport('JPEG');
+          } else if (item === 'Export Canvas') {
+            saveCanvasAsJpeg();
           }
           onClose();
         }}
@@ -74,7 +76,7 @@ const CustomMenu = memo(({ items, anchorEl, onClose, onExport }) => (
   </Menu>
 ));
 
-const ImageEditorMenuBar = memo(({ layers, selectedLayerId }) => {
+const ImageEditorMenuBar = memo(({ layers, selectedLayerId, saveCanvasAsJpeg }) => {
   const [menuState, setMenuState] = React.useState({
     activeMenu: null,
     anchorEl: null
@@ -97,6 +99,10 @@ const ImageEditorMenuBar = memo(({ layers, selectedLayerId }) => {
   const handleExport = useCallback((format) => {
     exportImage(layers, selectedLayerId, format);
   }, [layers, selectedLayerId]);
+
+  const handleSaveCanvasAsJpeg = useCallback(() => {
+    saveCanvasAsJpeg();
+  }, [saveCanvasAsJpeg]);
 
   return (
     <Box sx={{ flexGrow: 1, bgcolor: '#2b2b2b', padding: "0" }}>
@@ -123,6 +129,7 @@ const ImageEditorMenuBar = memo(({ layers, selectedLayerId }) => {
         anchorEl={menuState.anchorEl}
         onClose={handleMenuClose}
         onExport={handleExport}
+        saveCanvasAsJpeg={handleSaveCanvasAsJpeg}
       />
     </Box>
   );
