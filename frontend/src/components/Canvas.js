@@ -266,6 +266,7 @@ const Canvas = memo(function Canvas({
   const [isDrawing, setIsDrawing] = useState(false);
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [snackbarMessage, setSnackbarMessage] = useState('');
+  const [lastPos, setLastPos] = useState(null);
 
   const onRectTool = useCallback(() => {
     setIsDrawingRect(true);
@@ -652,9 +653,18 @@ const Canvas = memo(function Canvas({
   const handleMouseDown = useCallback((e) => {
     const pos = getMousePos(e, canvasRef);
     setStartPos(pos);
+    setLastPos(pos);
 
     if (isDrawingIndicators) {
       setIsDrawing(true);
+      // Draw with correct color from the start
+      const ctx = contextRef.current;
+      ctx.beginPath();
+      ctx.fillStyle = drawingType === 0 ? 'rgba(0,0,0,1)' : 'rgba(255,255,255,1)';
+      ctx.arc(pos.x, pos.y, brushSize, 0, Math.PI * 2);
+      ctx.fill();
+      setIndicators(prev => [...prev, { pos, type: drawingType }]);
+      updateMask2dArr(pos, drawingType);
       return;
     }
 
@@ -677,7 +687,7 @@ const Canvas = memo(function Canvas({
         setIsDragging(true);
       }
     }
-  }, [selectedTool, selectedLayerId, layers, isDrawingRect, isDrawingIndicators, mask2dArr]);
+  }, [selectedTool, selectedLayerId, layers, isDrawingRect, isDrawingIndicators, drawingType, brushSize]);
 
   const handleMouseMove = useCallback((e) => {
     const pos = getMousePos(e, canvasRef);
@@ -700,16 +710,45 @@ const Canvas = memo(function Canvas({
     }
 
     if (isDrawingIndicators && isDrawing) {
-      console.log('drawing');
-      // Draw indicator preview while moving
-      const ctx = contextRef.current;
-      // Draw the brush cursor as a preview with the appropriate color
-      ctx.beginPath();
-      ctx.fillStyle = drawingType === 0 ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.5)';
-      ctx.arc(pos.x, pos.y, brushSize, 0, Math.PI * 2);
-      ctx.fill();
-      setIndicators(prev => [...prev, { pos, type: drawingType }]);
-      updateMask2dArr(pos, drawingType);
+      // Only interpolate if we have a last position
+      if (lastPos) {
+        // Get interpolated points between last and current position
+        const points = interpolatePoints(lastPos, pos);
+        const ctx = contextRef.current;
+        
+        // Draw temporary visual feedback
+        ctx.save();
+        ctx.lineWidth = brushSize * 2;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = drawingType === 0 ? 'rgba(0,0,0,1)' : 'rgba(255,255,255,1)';
+        
+        // Draw a smooth line between points
+        ctx.beginPath();
+        ctx.moveTo(lastPos.x, lastPos.y);
+        
+        // Use quadratic curves for smoother lines
+        for (let i = 0; i < points.length; i++) {
+          const point = points[i];
+          if (i === 0) {
+            ctx.lineTo(point.x, point.y);
+          } else {
+            const xc = (point.x + points[i - 1].x) / 2;
+            const yc = (point.y + points[i - 1].y) / 2;
+            ctx.quadraticCurveTo(points[i - 1].x, points[i - 1].y, xc, yc);
+          }
+          
+          // Add to indicators and update mask
+          setIndicators(prev => [...prev, { pos: point, type: drawingType }]);
+          updateMask2dArr(point, drawingType);
+        }
+        
+        ctx.lineTo(pos.x, pos.y);
+        ctx.stroke();
+        ctx.restore();
+      }
+      
+      setLastPos(pos);
       return;
     }
 
@@ -769,9 +808,16 @@ const Canvas = memo(function Canvas({
     }
     setStartPos(pos);
     // drawLayers(contextRef.current, canvasRef.current, layers);
-  }, [selectedTool, selectedLayerId, layers, isDragging, transformHandle, path, isDrawingRect, rectStart, isDrawingIndicators, mask2dArr, brushSize, indicators, isDrawingIndicators, isDrawing]);
+  }, [selectedTool, selectedLayerId, layers, isDragging, transformHandle, path, isDrawingRect, 
+      rectStart, isDrawingIndicators, mask2dArr, brushSize, indicators, isDrawing, lastPos, drawingType]);
 
   const handleMouseUp = useCallback(() => {
+    setLastPos(null);
+    setIsDrawing(false);
+    setIsDragging(false);
+    setTransformHandle(null);
+    setIsDrawingRect(false);
+
     if (selectedTool === 'lasso' && isLassoDrawing) {
       setIsLassoDrawing(false);
       if (path.length > 2) {
@@ -782,10 +828,6 @@ const Canvas = memo(function Canvas({
         }
       }
     }
-    setIsDrawing(false);
-    setIsDragging(false);
-    setTransformHandle(null);
-    setIsDrawingRect(false);
   }, [selectedTool, path]);
 
     const updateMask2dArr = useCallback((canvasPos, type) => {
@@ -794,40 +836,61 @@ const Canvas = memo(function Canvas({
       const selectedLayer = layers.find(layer => layer.id === selectedLayerId);
       if (!selectedLayer) return;
   
-      // 1. Transform from canvas to layer-local coordinates
+      // Transform coordinates
       const dx = canvasPos.x - selectedLayer.x;
       const dy = canvasPos.y - selectedLayer.y;
-      
-      // 2. Apply rotation transform
       const angle = -selectedLayer.rotation * Math.PI / 180;
       const localX = dx * Math.cos(angle) - dy * Math.sin(angle);
       const localY = dx * Math.sin(angle) + dy * Math.cos(angle);
-  
-      // 3. Convert to image/mask space coordinates
       const imageX = Math.round((localX / selectedLayer.scale) + (selectedLayer.image.width / 2));
       const imageY = Math.round((localY / selectedLayer.scale) + (selectedLayer.image.height / 2));
   
       // Create a copy of the mask array
       const newMask = [...mask2dArr];
-      
-      // Apply brush in mask space coordinates
+  
+      // Apply anti-aliased brush effect
       const brushRadius = brushSize;
       for (let dy = -brushRadius; dy <= brushRadius; dy++) {
-          for (let dx = -brushRadius; dx <= brushRadius; dx++) {
-              const maskX = imageX + dx;
-              const maskY = imageY + dy;
-              const distance = Math.sqrt(dx * dx + dy * dy);
-  
-              if (distance <= brushRadius && 
-                  maskX >= 0 && maskX < newMask[0].length && 
-                  maskY >= 0 && maskY < newMask.length) {
-                  newMask[maskY][maskX] = type === 0 ? 0 : 1;
-              }
+        for (let dx = -brushRadius; dx <= brushRadius; dx++) {
+          const maskX = imageX + dx;
+          const maskY = imageY + dy;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          
+          // Apply smooth falloff at brush edges
+          if (distance <= brushRadius && 
+              maskX >= 0 && maskX < newMask[0].length && 
+              maskY >= 0 && maskY < newMask.length) {
+            // Create soft brush edge effect
+            const intensity = Math.max(0, 1 - (distance / brushRadius));
+            newMask[maskY][maskX] = type === 0 ? 0 : 1;
           }
+        }
       }
   
       setMask2dArr(newMask);
   }, [mask2dArr, brushSize, selectedLayerId, layers]);
+
+  const interpolatePoints = (p1, p2) => {
+    const points = [];
+    const dx = p2.x - p1.x;
+    const dy = p2.y - p1.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    
+    // Increase number of interpolated points for smoother lines
+    // Adjust this value to control smoothness (lower = more points)
+    const step = brushSize / 4;
+    const numPoints = Math.max(Math.ceil(distance / step), 1);
+    
+    for (let i = 1; i < numPoints; i++) {
+      const t = i / numPoints;
+      points.push({
+        x: p1.x + dx * t,
+        y: p1.y + dy * t
+      });
+    }
+    
+    return points;
+  };
 
   return (
     <Box sx={{ flex: 1, position: 'relative', overflow: 'hidden', bgcolor: '#1e1e1e' }}>
