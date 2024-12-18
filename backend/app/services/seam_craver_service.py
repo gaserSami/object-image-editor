@@ -2,6 +2,8 @@ from app.utils.image_utils import ImageUtils
 import numpy as np
 import cv2 as cv
 from app.models.seam_carving import remove, add_seams, remove_seams
+import os
+import imageio.v2 as imageio
 
 class SeamCarverService:
     @staticmethod
@@ -67,7 +69,7 @@ class SeamCarverService:
             return image
 
     @staticmethod
-    def remove_object(image_data, object_mask, protect_mask, forward=True):
+    def remove_object(image_data, object_mask, protect_mask, forward=True, direction="auto"):
         """
         Remove object from image using seam carving.
         
@@ -75,9 +77,11 @@ class SeamCarverService:
         image_data (str): Base64 encoded image data.
         object_mask (str): Base64 encoded mask of the object to be removed.
         protect_mask (str): Base64 encoded protective mask to preserve certain areas.
+        forward (bool): Whether to use forward energy (default: True)
+        direction (str): Optional direction for seam removal ('vertical', 'horizontal', or None for auto)
         
         Returns:
-        np.ndarray: Image with the object removed.
+        tuple: (np.ndarray, str) - (Image with object removed, Path to generated GIF)
         """
         # Decode base64 image data
         image = ImageUtils.decode_base64_image(image_data)
@@ -94,8 +98,69 @@ class SeamCarverService:
             protect_mask = cv.cvtColor(protect_mask, cv.COLOR_BGR2GRAY)
             protect_mask = np.where(protect_mask > 0, 1, 0)
             protect_mask = protect_mask.astype(np.float64)
-            
+        
+        intermediate_images = [] # to be global
+        
         # Perform object removal
-        output, _ = remove(image, remove_mask=object_mask, protect_mask=protect_mask, forward=forward)
+        try:
+            output, _, intermediate_images = remove(
+                image, 
+                remove_mask=object_mask, 
+                protect_mask=protect_mask, 
+                forward=forward,
+                direction=direction
+            )
+        except Exception as e:
+            gif_path = make_gif(intermediate_images=intermediate_images, image=image)
+            print(gif_path)
+            print(e)
+            return image, None
+        
+        gif_path = make_gif(intermediate_images=intermediate_images, image=image)
+        print(gif_path)
         
         return output.astype(np.uint8)
+    
+def make_gif(intermediate_images, image):
+    # Create tmp directory if it doesn't exist
+    os.makedirs('tmp', exist_ok=True)
+    
+    # Generate unique filename
+    gif_path = os.path.join('tmp', f'seam_carving.gif')
+    
+    # Convert images to uint8 and pad smaller images to match the original size
+    uint8_images = []
+    original_shape = image.shape
+    channels = 1 if len(original_shape) == 2 else original_shape[2]
+    
+    for img in intermediate_images:
+        # Convert to float64 for normalization operations
+        img = img.astype(np.float64)
+        
+        # Handle normalized values (0-1 range)
+        if img.max() <= 1.0:
+            img = img * 255
+            
+        # Handle both 3-channel and 1-channel images
+        if len(img.shape) != len(original_shape):
+            if len(img.shape) == 2 and channels == 3:
+                img = np.stack((img,) * 3, axis=-1)
+            elif len(img.shape) == 3 and channels == 1:
+                img = img[:,:,0]
+                
+        # Create padded image with correct dimensions
+        if channels == 1:
+            padded_img = np.zeros(original_shape, dtype=np.uint8)
+        else:
+            padded_img = np.zeros((original_shape[0], original_shape[1], channels), dtype=np.uint8)
+            
+        h, w = img.shape[:2]
+        if channels == 1:
+            padded_img[:h, :w] = np.clip(img, 0, 255).astype(np.uint8)
+        else:
+            padded_img[:h, :w, :] = np.clip(img, 0, 255).astype(np.uint8)
+            
+        uint8_images.append(padded_img)
+        
+    imageio.mimsave(gif_path, uint8_images, duration=0.1)  # 0.1 seconds per frame
+    return gif_path

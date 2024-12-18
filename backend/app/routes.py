@@ -135,7 +135,8 @@ def remove_object():
             image_data=data['image'],
             object_mask=data['mask'],
             protect_mask=data['protection'],
-            forward=data['forward']
+            forward=data['forward'],
+            direction=data['direction']
         )
         
         return jsonify({

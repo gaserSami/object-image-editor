@@ -27,7 +27,14 @@ const OptionsBar = memo(function OptionsBar({ selectedTool, onCreateMask,
   setIsForward,
   onAddPathOffset,
   onHeal,
-  onHealAI
+  onHealAI,
+  layers,
+  referenceLayerId,
+  onReferenceLayerChange,
+  retargetMode,
+  onRetargetModeChange,
+  direction,
+  setDirection
 }) {
   const getToolIcon = useCallback(() => {
     switch (selectedTool) {
@@ -193,6 +200,28 @@ const OptionsBar = memo(function OptionsBar({ selectedTool, onCreateMask,
             <Typography variant="body2" sx={{ fontSize: '0.75rem' }}>
               Select your target layer, protection layer and mask layer then click to remove.
             </Typography>
+            <Select
+              size="small"
+              value={direction}
+              onChange={(e) => setDirection(e.target.value)}
+              sx={{ 
+                width: '120px',
+                color: 'white',
+                height: '24px',
+                fontSize: '0.75rem',
+                '& .MuiOutlinedInput-notchedOutline': {
+                  borderColor: '#90caf9',
+                },
+                '& .MuiSelect-select': {
+                  padding: '2px 8px',
+                  lineHeight: '20px',
+                }
+              }}
+            >
+              <MenuItem value="horizontal" sx={{ fontSize: '0.75rem' }}>Horizontal</MenuItem>
+              <MenuItem value="vertical" sx={{ fontSize: '0.75rem' }}>Vertical</MenuItem>
+              <MenuItem value="auto" sx={{ fontSize: '0.75rem' }}>Auto</MenuItem>
+            </Select>
             <Switch
               checked={isForward}
               onChange={(e) => setIsForward(e.target.checked)}
@@ -298,82 +327,110 @@ const OptionsBar = memo(function OptionsBar({ selectedTool, onCreateMask,
               Adjust target image and optionally select protection layer:
             </Typography>
             <Box display="flex" alignItems="center" gap={1}>
-              <Typography variant="caption">Width %:</Typography>
-              <TextField
-                type="number"
+              <Select
                 size="small"
-                value={retargetWidth}
-                onChange={(e) => { onRetargetWidthChange(e.target.value) }}
-                InputProps={{
-                  inputProps: {
-                    min: -80,
-                    max: 80,
+                value={retargetMode}
+                onChange={(e) => onRetargetModeChange(e.target.value)}
+                sx={{ 
+                  width: '120px',
+                  color: 'white',
+                  height: '24px',
+                  fontSize: '0.75rem',
+                  '& .MuiOutlinedInput-notchedOutline': {
+                    borderColor: '#90caf9',
                   },
-                  sx: {
+                  '& .MuiSelect-select': {
+                    padding: '2px 8px',
+                    lineHeight: '20px',
+                  }
+                }}
+              >
+                <MenuItem value="percentage" sx={{ fontSize: '0.75rem' }}>Percentage</MenuItem>
+                <MenuItem value="reference" sx={{ fontSize: '0.75rem' }}>Reference Layer</MenuItem>
+              </Select>
+
+              {retargetMode === 'percentage' ? (
+                <>
+                  <Typography variant="caption">Width %:</Typography>
+                  <TextField
+                    type="number"
+                    size="small"
+                    value={retargetWidth}
+                    onChange={(e) => { onRetargetWidthChange(e.target.value) }}
+                    InputProps={{
+                      inputProps: { min: -80, max: 80 },
+                      sx: {
+                        color: 'white',
+                        height: '32px',
+                        '& input': {
+                          padding: '4px 8px',
+                          fontSize: '0.75rem',
+                        },
+                        '& .MuiOutlinedInput-notchedOutline': {
+                          borderColor: '#90caf9',
+                        },
+                        backgroundColor: 'transparent',
+                      }
+                    }}
+                    sx={{ width: '80px' }}
+                  />
+
+                  <Typography variant="caption" sx={{ color: 'white' }}>Height %:</Typography>
+                  <TextField
+                    type="number"
+                    size="small"
+                    value={retargetHeight}
+                    onChange={(e) => { onRetargetHeightChange(e.target.value) }}
+                    InputProps={{
+                      inputProps: { min: -100, max: 100 },
+                      sx: {
+                        color: 'white',
+                        height: '32px',
+                        '& input': {
+                          padding: '4px 8px',
+                          fontSize: '0.75rem',
+                        },
+                        '& .MuiOutlinedInput-notchedOutline': {
+                          borderColor: '#90caf9',
+                        },
+                        backgroundColor: 'transparent',
+                      }
+                    }}
+                    sx={{ width: '80px' }}
+                  />
+                </>
+              ) : (
+                <Select
+                  size="small"
+                  value={referenceLayerId || ''}
+                  onChange={(e) => onReferenceLayerChange(e.target.value)}
+                  sx={{ 
+                    width: '150px',
                     color: 'white',
-                    height: '32px',
-                    '& input': {
-                      padding: '4px 8px',
-                      fontSize: '0.75rem',
-                    },
+                    height: '24px',
+                    fontSize: '0.75rem',
                     '& .MuiOutlinedInput-notchedOutline': {
                       borderColor: '#90caf9',
                     },
-                    '&:hover .MuiOutlinedInput-notchedOutline': {
-                      borderColor: '#42a5f5',
-                    },
-                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                      borderColor: '#1976d2',
-                    },
-                    backgroundColor: 'transparent',
-                  }
-                }}
-                sx={{
-                  width: '80px',
-                  '& input::-webkit-outer-spin-button, & input::-webkit-inner-spin-button': {
-                    '-webkit-appearance': 'none',
-                  },
-                }}
-              />
-
-              <Typography variant="caption" sx={{ color: 'white' }}>Height %:</Typography>
-
-              <TextField
-                type="number"
-                size="small"
-                value={retargetHeight}
-                onChange={(e) => { onRetargetHeightChange(e.target.value) }}
-                InputProps={{
-                  inputProps: {
-                    min: -100,
-                    max: 100,
-                  },
-                  sx: {
-                    color: 'white',
-                    height: '32px',
-                    '& input': {
-                      padding: '4px 8px',
-                      fontSize: '0.75rem',
-                    },
-                    '& .MuiOutlinedInput-notchedOutline': {
-                      borderColor: '#90caf9',
-                    },
-                    '&:hover .MuiOutlinedInput-notchedOutline': {
-                      borderColor: '#42a5f5',
-                    },
-                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                      borderColor: '#1976d2',
-                    },
-                    backgroundColor: 'transparent',
-                  }
-                }}
-                sx={{
-                  width: '80px',
-                  '& input::-webkit-outer-spin-button, & input::-webkit-inner-spin-button': {
-                    '-webkit-appearance': 'none',
-                  },
-                }}
-              />
+                    '& .MuiSelect-select': {
+                      padding: '2px 8px',
+                      lineHeight: '20px',
+                    }
+                  }}
+                >
+                  {layers.map((layer) => (
+                    <MenuItem 
+                      key={layer.id} 
+                      value={layer.id}
+                      sx={{ fontSize: '0.75rem' }}
+                    >
+                      {layer.type === 'mask' ? 
+                        `Mask (${layer.parentLayerId ? `Layer ${layers.findIndex(l => l.id === layer.parentLayerId) + 1}` : 'Unlinked'})` : 
+                        `Layer ${layers.indexOf(layer) + 1}`}
+                    </MenuItem>
+                  ))}
+                </Select>
+              )}
             </Box>
             <Switch
               checked={isForward}

@@ -30,6 +30,9 @@ function App() {
   const [addLayerDialogOpen, setAddLayerDialogOpen] = useState(false);
   const [layerType, setLayerType] = useState('image');
   const [parentLayerId, setParentLayerId] = useState(null);
+  const [retargetMode, setRetargetMode] = useState('percentage');
+  const [referenceLayerId, setReferenceLayerId] = useState(null);
+  const [direction, setDirection] = useState("auto"); 
 
   const handleSnackbarClose = () => {
     setSnackbarOpen(false);
@@ -248,7 +251,7 @@ function App() {
     }
     setIsLoading(true);
     const selectedLayer = targetLayer;
-    removeObject(selectedLayer.imageUrl, maskLayer?.imageUrl, protectionLayer?.imageUrl, isForward)
+    removeObject(selectedLayer.imageUrl, maskLayer?.imageUrl, protectionLayer?.imageUrl, isForward, direction)
       .then(res => {
         const img = new Image();
         img.onload = () => {
@@ -273,7 +276,7 @@ function App() {
         setSnackbarOpen(true);
         setIsLoading(false);
       });
-  }, [layers, maskLayer, protectionLayer, targetLayer, isForward, setLayers, setSelectedLayerId, setIsLoading]);
+  }, [layers, maskLayer, protectionLayer, targetLayer, isForward, setLayers, setSelectedLayerId, setIsLoading, direction]);
 
   const onRetargetApply = useCallback(() => {
     if(!targetLayer){
@@ -281,15 +284,32 @@ function App() {
       setSnackbarOpen(true);
       return;
     }
-    if(retargetHeight === 0 && retargetWidth === 0){
-      setSnackbarMessage("Please enter a valid retarget height and width.");
-      setSnackbarOpen(true);
-      return;
+
+    let newWidth, newHeight;
+    
+    if (retargetMode === 'percentage') {
+      if(retargetHeight === 0 && retargetWidth === 0){
+        setSnackbarMessage("Please enter a valid retarget height and width.");
+        setSnackbarOpen(true);
+        return;
+      }
+      // Calculate new dimensions based on percentage
+      newWidth = targetLayer.image.width + (retargetWidth * targetLayer.image.width / 100);
+      newHeight = targetLayer.image.height + (retargetHeight * targetLayer.image.height / 100);
+    } else {
+      // Use reference layer dimensions
+      const referenceLayer = layers.find(l => l.id === referenceLayerId);
+      if (!referenceLayer) {
+        setSnackbarMessage("Please select a reference layer.");
+        setSnackbarOpen(true);
+        return;
+      }
+      newWidth = referenceLayer.image.width;
+      newHeight = referenceLayer.image.height;
     }
     
     setIsLoading(true);
-    const selectedLayer = targetLayer;
-    resizeImage(selectedLayer.imageUrl, selectedLayer.image.height + (retargetHeight * selectedLayer.image.height / 100), selectedLayer.image.width + (retargetWidth * selectedLayer.image.width / 100), protectionLayer?.imageUrl, isForward)
+    resizeImage(targetLayer.imageUrl, newHeight, newWidth, protectionLayer?.imageUrl, isForward)
       .then(res => {
         const img = new Image();
         img.onload = () => {
@@ -314,7 +334,7 @@ function App() {
         setSnackbarOpen(true);
         setIsLoading(false);
       });
-  }, [layers, maskLayer, protectionLayer, retargetHeight, retargetWidth, targetLayer, isForward, setLayers, setSelectedLayerId, setIsLoading]);
+  }, [layers, maskLayer, protectionLayer, retargetHeight, retargetWidth, targetLayer, isForward, retargetMode, referenceLayerId, setLayers, setSelectedLayerId, setIsLoading]);
 
   const onSelect = useCallback(() => {
     if (canvasRef.current?.onSelect) {
@@ -475,6 +495,28 @@ function App() {
   
   }, [layers, rightClickedLayerId]);
 
+  const handleRetargetModeChange = (mode) => {
+    setRetargetMode(mode);
+    if (mode === 'percentage') {
+      setReferenceLayerId(null);
+    }
+  };
+
+  const handleReferenceLayerChange = (layerId) => {
+    setReferenceLayerId(layerId);
+    // Update width/height based on the reference layer's dimensions
+    const referenceLayer = layers.find(l => l.id === layerId);
+    if (referenceLayer) {
+      const targetLayer = layers.find(l => l.id === selectedLayerId);
+      if (targetLayer) {
+        const widthDiff = ((referenceLayer.image.width - targetLayer.image.width) / targetLayer.image.width) * 100;
+        const heightDiff = ((referenceLayer.image.height - targetLayer.image.height) / targetLayer.image.height) * 100;
+        setRetargetWidth(widthDiff);
+        setRetargetHeight(heightDiff);
+      }
+    }
+  };
+
   return (
     <>
       <CssBaseline />
@@ -523,6 +565,13 @@ function App() {
         onAddPathOffset={onAddPathOffset}
         onHeal={onInpaint}
         onHealAI={onHealAI}
+        layers={layers}
+        referenceLayerId={referenceLayerId}
+        onReferenceLayerChange={handleReferenceLayerChange}
+        retargetMode={retargetMode}
+        onRetargetModeChange={handleRetargetModeChange}
+        direction={direction}
+        setDirection={setDirection}
       />
       <Box display="flex" height="calc(100vh - 88px)" bgcolor="background.default">
         <CustomToolbar onSelectTool={setSelectedTool} selectedTool={selectedTool}

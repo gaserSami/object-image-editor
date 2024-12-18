@@ -56,12 +56,13 @@ export const resizeImage = (image, height, width, protection = null, forward=tru
  * @param {object|null} protection - The protection data (optional).
  * @returns {Promise} - The axios response promise.
  */
-export const removeObject = (image, mask=null, protection=null, forward=true) => {
+export const removeObject = (image, mask=null, protection=null, forward=true, direction="auto") => {
   return axios.post(`${API_URL}/remove-object`, {
     "image": image,
     "mask": mask,
     "protection": protection,
-    "forward": forward
+    "forward": forward,
+    "direction": direction
   });
 };
 
