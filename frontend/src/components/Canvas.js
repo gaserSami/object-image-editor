@@ -63,7 +63,7 @@ const drawIndicators = (ctx, indicators, brushSize) => {
   if (!ctx || !indicators) return;
   indicators.forEach(indicator => {
     ctx.beginPath();
-    ctx.fillStyle = indicator.type === 0 ? 'rgba(255,0,0,1)' : 'rgba(0,255,0,1)';
+    ctx.fillStyle = indicator.type === 0 ? 'rgba(0,0,0,1)' : 'rgba(255,255,255,1)';
     ctx.arc(indicator.pos.x, indicator.pos.y, brushSize, 0, Math.PI * 2);
     ctx.fill();
   });
@@ -705,7 +705,7 @@ const Canvas = memo(function Canvas({
       const ctx = contextRef.current;
       // Draw the brush cursor as a preview with the appropriate color
       ctx.beginPath();
-      ctx.fillStyle = drawingType === 0 ? 'rgba(255,0,0,0.5)' : 'rgba(0,255,0,0.5)';
+      ctx.fillStyle = drawingType === 0 ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.5)';
       ctx.arc(pos.x, pos.y, brushSize, 0, Math.PI * 2);
       ctx.fill();
       setIndicators(prev => [...prev, { pos, type: drawingType }]);
