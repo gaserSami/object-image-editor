@@ -263,15 +263,15 @@ const Canvas = memo(function Canvas({
       setSnackbarMessage("There are no indicators to reset.");
       setSnackbarOpen(true);
     }
-  }, []);
+  }, [indicators]);
 
   const handleSnackbarClose = () => {
     setSnackbarOpen(false);
   };
 
   const handleCreateMask = useCallback(() => {
-    if (!selectedLayerId || !path || path.length < 3) {
-      setSnackbarMessage("Cannot create mask: No selection or invalid path");
+    if (!selectedLayerId) {
+      setSnackbarMessage("Cannot create mask: No selected layer");
       setSnackbarOpen(true);
       return;
     }
@@ -287,35 +287,36 @@ const Canvas = memo(function Canvas({
     tempCanvas.width = canvasRef.current.width;
     tempCanvas.height = canvasRef.current.height;
     const tempCtx = tempCanvas.getContext('2d');
-    // Draw the lasso selection in white on black background
+    
+    // Fill with black by default
     tempCtx.fillStyle = 'black';
     tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
-    tempCtx.fillStyle = 'white';
-    tempCtx.beginPath();
-    tempCtx.moveTo(path[0].x, path[0].y);
-    path.forEach(point => tempCtx.lineTo(point.x, point.y));
-    tempCtx.closePath();
-    tempCtx.fill();
-    // Load the original image to get its dimensions
+
+    // Only draw the white path if it exists
+    if (path && path.length > 0) {
+      tempCtx.fillStyle = 'white';
+      tempCtx.beginPath();
+      tempCtx.moveTo(path[0].x, path[0].y);
+      path.forEach(point => tempCtx.lineTo(point.x, point.y));
+      tempCtx.closePath();
+      tempCtx.fill();
+    }
+
+    // Rest of the function remains the same...
     const selectedImg = selectedLayer.image;
-    // Create final mask canvas at original image size
     const maskCanvas = document.createElement('canvas');
     maskCanvas.width = selectedImg.width;
     maskCanvas.height = selectedImg.height;
     const maskCtx = maskCanvas.getContext('2d');
-    // Calculate the transformation to map back to original image space
     const scaleX = 1 / selectedLayer.scale;
     const scaleY = 1 / selectedLayer.scale;
-    // Clear mask canvas with black
     maskCtx.fillStyle = 'black';
     maskCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
-    // Apply inverse transform and draw the mask
     maskCtx.save();
     maskCtx.translate(selectedImg.width / 2, selectedImg.height / 2);
     maskCtx.rotate(-selectedLayer.rotation * Math.PI / 180);
     maskCtx.scale(scaleX, scaleY);
     maskCtx.translate(-selectedLayer.x, -selectedLayer.y);
-    // Draw the temporary canvas content onto the final mask
     maskCtx.drawImage(tempCanvas, 0, 0);
     maskCtx.restore();
     const maskImage = new Image();
@@ -331,12 +332,10 @@ const Canvas = memo(function Canvas({
         y: selectedLayer.y,
         scale: selectedLayer.scale,
         rotation: selectedLayer.rotation
-      }
-      ]);
+      }]);
     };
     maskImage.src = maskCanvas.toDataURL('image/png');
-    // setPath([]);
-  }, [selectedLayerId, path, layers, canvasRef, setLayers, setPath]);
+  }, [selectedLayerId, path, layers, canvasRef, setLayers]);
 
   const handleApplyMask = useCallback(async (maskLayer, parentLayer) => {
     if (!parentLayer || !maskLayer) return;

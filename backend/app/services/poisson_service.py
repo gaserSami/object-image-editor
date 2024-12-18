@@ -26,7 +26,7 @@ class PoissonService:
         # Convert mask to binary if needed
         if len(mask.shape) == 3:
             mask = cv2.cvtColor(mask, cv2.COLOR_BGR2GRAY)
-        _, mask = cv2.threshold(mask, 127, 255, cv2.THRESH_BINARY)
+            mask[mask > 0] = 255
         
         try:
             result = poisson_edit(source, target, mask, mood)

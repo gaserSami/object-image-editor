@@ -109,7 +109,12 @@ def resize_image():
                 "image": ImageUtils.encode_image(result)
         })
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        error_trace = traceback.format_exc()
+        logger.error(f"Error in remove_object: {str(e)}\n{error_trace}")
+        return jsonify({
+            'error': str(e),
+            'traceback': error_trace
+        }), 500
 
 @app.route('/remove-object', methods=['POST'])
 def remove_object():

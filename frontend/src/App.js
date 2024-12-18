@@ -236,7 +236,7 @@ function App() {
         setIsLoading(false);
       });
 
-  }, [targetLayer, maskLayer, sourceLayer, setLayers, blendMode, setIsLoading]);
+  }, [targetLayer, maskLayer, sourceLayer, setLayers, blendMode, setIsLoading, layers]);
 
   const onRemove = useCallback(() => {
     if(!targetLayer){
@@ -633,7 +633,10 @@ function App() {
             <InputLabel sx={{ color: '#fff' }}>Type</InputLabel>
             <Select
               value={layerType}
-              onChange={(e) => setLayerType(e.target.value)}
+              onChange={(e) => {
+                setLayerType(e.target.value);
+                setParentLayerId(null); // Reset parent layer when type changes
+              }}
               sx={{ color: '#fff', '.MuiSelect-icon': { color: '#fff' } }}
             >
               <MenuItem value="image">Image</MenuItem>
@@ -644,7 +647,7 @@ function App() {
             <FormControl fullWidth margin="normal">
               <InputLabel sx={{ color: '#fff' }}>Parent Layer</InputLabel>
               <Select
-                value={parentLayerId}
+                value={parentLayerId || ''}
                 onChange={(e) => setParentLayerId(e.target.value)}
                 sx={{ color: '#fff', '.MuiSelect-icon': { color: '#fff' } }}
               >
@@ -658,15 +661,24 @@ function App() {
               </Select>
             </FormControl>
           )}
-          {layerType === 'mask' && layers.length === 0 && (
+          {layerType === 'mask' && !parentLayerId && (
             <Typography variant="body2" sx={{ color: '#f48fb1', mt: 2 }}>
-              No parent layers available to create a mask.
+              {layers.length === 0 
+                ? "No parent layers available to create a mask."
+                : "Please select a parent layer for the mask."}
             </Typography>
           )}
         </DialogContent>
         <DialogActions sx={{ bgcolor: '#333' }}>
           <Button onClick={() => setAddLayerDialogOpen(false)} sx={{ color: '#fff' }}>Cancel</Button>
-          <Button onClick={handleAddLayerConfirm} color="primary" sx={{ color: '#fff' }}>Add</Button>
+          <Button 
+            onClick={handleAddLayerConfirm} 
+            color="primary" 
+            sx={{ color: '#fff' }}
+            disabled={layerType === 'mask' && !parentLayerId}
+          >
+            Add
+          </Button>
         </DialogActions>
       </Dialog>
     </>

@@ -4,6 +4,7 @@ import cv2 as cv
 from app.models.seam_carving import remove, add_seams, remove_seams
 import os
 import imageio.v2 as imageio
+import matplotlib.pyplot as plt
 
 class SeamCarverService:
     @staticmethod
@@ -29,44 +30,39 @@ class SeamCarverService:
             protect_mask = cv.cvtColor(protect_mask, cv.COLOR_BGR2GRAY)
             protect_mask = protect_mask.astype(np.float64)
         
-        try:
-            # Calculate size differences
-            current_height, current_width = image.shape[:2]
-            dy = int(new_height) - current_height 
-            dx = int(new_width) - current_width
+        # Calculate size differences
+        current_height, current_width = image.shape[:2]
+        dy = int(new_height) - current_height 
+        dx = int(new_width) - current_width
 
-            output = image.copy()
-            
-            # Handle width change
-            if dx != 0:
-                if dx < 0:
-                    # Remove seams to decrease width
-                    output, _ = remove_seams(output, abs(dx), protect_mask, forward=forward)
-                else:
-                    # Add seams to increase width
-                    output, _ = add_seams(output, dx, protect_mask, forward=forward)
-                    
-            # Handle height change by rotating image 90 degrees
-            if dy != 0:
-                output = np.rot90(output)
-                if protect_mask is not None:
-                    protect_mask = np.rot90(protect_mask)
+        output = image.copy()
+        
+        # Handle width change
+        if dx != 0:
+            if dx < 0:
+                # Remove seams to decrease width
+                output, _, _ = remove_seams(output, abs(dx), protect_mask, forward=forward)
+            else:
+                # Add seams to increase width
+                output, _ = add_seams(output, dx, protect_mask, forward=forward)
                 
-                if dy < 0:
-                    # Remove seams to decrease height
-                    output, _ = remove_seams(output, abs(dy), protect_mask, forward=forward)
-                else:
-                    # Add seams to increase height
-                    output, _ = add_seams(output, dy, protect_mask, forward=forward)
-                    
-                # Rotate image back to original orientation
-                output = np.rot90(output, -1)
+        # Handle height change by rotating image 90 degrees
+        if dy != 0:
+            output = np.rot90(output)
+            if protect_mask is not None:
+                protect_mask = np.rot90(protect_mask)
             
-            return output.astype(np.uint8)
-            
-        except ValueError as e:
-            print(e)
-            return image
+            if dy < 0:
+                # Remove seams to decrease height
+                output, _, _ = remove_seams(output, abs(dy), protect_mask, forward=forward)
+            else:
+                # Add seams to increase height
+                output, _ = add_seams(output, dy, protect_mask, forward=forward)
+                
+            # Rotate image back to original orientation
+            output = np.rot90(output, -1)
+        
+        return output.astype(np.uint8)
 
     @staticmethod
     def remove_object(image_data, object_mask, protect_mask, forward=True, direction="auto"):
