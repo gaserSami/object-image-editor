@@ -126,6 +126,118 @@ const drawTransformHandles = (ctx, layer) => {
   });
 };
 
+const extractBoundaryPathFromMask = (maskLayer) => {
+  // Create temporary canvas for mask processing
+  const maskCanvas = document.createElement('canvas');
+  const maskCtx = maskCanvas.getContext('2d');
+  maskCanvas.width = maskLayer.image.width;
+  maskCanvas.height = maskLayer.image.height;
+  maskCtx.drawImage(maskLayer.image, 0, 0);
+
+  const maskData = maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
+  const data = maskData.data;
+  
+  // Helper function to check if pixel is white (part of mask)
+  const isWhitePixel = (x, y) => {
+    if (x < 0 || y < 0 || x >= maskCanvas.width || y >= maskCanvas.height) return false;
+    const idx = (y * maskCanvas.width + x) * 4;
+    return data[idx] > 128 || data[idx + 1] > 128 || data[idx + 2] > 128;
+  };
+
+  // Find the boundary pixels
+  const boundaryPoints = [];
+  for (let y = 0; y < maskCanvas.height; y++) {
+    for (let x = 0; x < maskCanvas.width; x++) {
+      if (isWhitePixel(x, y)) {
+        // Check if this is a boundary pixel by looking at neighbors
+        const isBoundary = !isWhitePixel(x-1, y) || !isWhitePixel(x+1, y) ||
+                          !isWhitePixel(x, y-1) || !isWhitePixel(x, y+1);
+        if (isBoundary) {
+          boundaryPoints.push({ x, y });
+        }
+      }
+    }
+  }
+
+  if (boundaryPoints.length === 0) return [];
+
+  // Sort points to create a continuous path
+  const path = [boundaryPoints[0]];
+  const used = new Set([`${boundaryPoints[0].x},${boundaryPoints[0].y}`]);
+  
+  while (path.length < boundaryPoints.length) {
+    const last = path[path.length - 1];
+    let closest = null;
+    let minDist = Infinity;
+    
+    // Find the closest unused point
+    for (const point of boundaryPoints) {
+      const key = `${point.x},${point.y}`;
+      if (!used.has(key)) {
+        const dist = Math.hypot(point.x - last.x, point.y - last.y);
+        if (dist < minDist) {
+          minDist = dist;
+          closest = point;
+        }
+      }
+    }
+    
+    if (!closest || minDist > 2) break; // Stop if no close points found
+    path.push(closest);
+    used.add(`${closest.x},${closest.y}`);
+  }
+
+  // Transform points to canvas space
+  const transformedPath = path.map(point => {
+    // Convert from image space to normalized space (-0.5 to 0.5)
+    const normalizedX = (point.x / maskLayer.image.width) - 0.5;
+    const normalizedY = (point.y / maskLayer.image.height) - 0.5;
+
+    // Apply scale
+    const scaledX = normalizedX * maskLayer.image.width * maskLayer.scale;
+    const scaledY = normalizedY * maskLayer.image.height * maskLayer.scale;
+
+    // Apply rotation
+    const angle = maskLayer.rotation * Math.PI / 180;
+    const rotatedX = scaledX * Math.cos(angle) - scaledY * Math.sin(angle);
+    const rotatedY = scaledX * Math.sin(angle) + scaledY * Math.cos(angle);
+
+    // Apply translation
+    return {
+      x: rotatedX + maskLayer.x,
+      y: rotatedY + maskLayer.y
+    };
+  });
+
+  // Smooth the path using Chaikin's algorithm
+  const smoothPath = (points, iterations = 2) => {
+    if (points.length < 3) return points;
+    
+    for (let iter = 0; iter < iterations; iter++) {
+      const newPoints = [];
+      for (let i = 0; i < points.length; i++) {
+        const p0 = points[i];
+        const p1 = points[(i + 1) % points.length];
+        
+        newPoints.push({
+          x: 0.75 * p0.x + 0.25 * p1.x,
+          y: 0.75 * p0.y + 0.25 * p1.y
+        });
+        
+        newPoints.push({
+          x: 0.25 * p0.x + 0.75 * p1.x,
+          y: 0.25 * p0.y + 0.75 * p1.y
+        });
+      }
+      points = newPoints;
+    }
+    return points;
+  };
+
+  // Return smoothed path
+  return smoothPath(transformedPath);
+};
+
 const Canvas = memo(function Canvas({
   layers,
   selectedLayerId,
@@ -478,6 +590,32 @@ const Canvas = memo(function Canvas({
     contextRef.current = canvas.getContext('2d');
   }, [canvasRef]);
 
+  const handleKeyDown = useCallback((e) => {
+    console.log(e.key);
+    console.log(selectedLayerId);
+    if (e.key === 'Escape') {
+      setIsDrawingRect(false);
+      setRectStart(null);
+      setRectEnd(null);
+      setPath([]);
+    } else if ((e.key === '0' || e.key === '1')) {
+      console.log('key down');
+      setDrawingType(parseInt(e.key, 10)); // Set drawing type as 0 or 1
+      setIsDrawingIndicators(true);
+    } else if (e.key === '3') {
+      setDrawingType(null);
+      setIsDrawingIndicators(false);
+    } else if (e.key === 's' && selectedLayerId) {
+      const selectedLayer = layers.find(layer => layer.id === selectedLayerId);
+      if (selectedLayer && selectedLayer.type === 'mask') {
+        console.log('s key down');
+        const selectionPath = extractBoundaryPathFromMask(selectedLayer);
+        console.log(selectionPath);
+        setPath(selectionPath);
+      }
+    }
+  }, [selectedLayerId, layers, setPath]);
+  
   useEffect(() => {
     setupCanvas();
     window.addEventListener('resize', setupCanvas);
@@ -486,7 +624,7 @@ const Canvas = memo(function Canvas({
       window.removeEventListener('resize', setupCanvas);
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, []);
+  }, [handleKeyDown]);
 
   useEffect(() => {
     canvasRef.current.handleApplyMask = handleApplyMask;
@@ -649,22 +787,6 @@ const Canvas = memo(function Canvas({
     setTransformHandle(null);
     setIsDrawingRect(false);
   }, [selectedTool, path]);
-
-  const handleKeyDown = useCallback((e) => {
-    if (e.key === 'Escape') {
-      setIsDrawingRect(false);
-      setRectStart(null);
-      setRectEnd(null);
-      setPath([]);
-    } else if ((e.key === '0' || e.key === '1')) {
-      console.log('key down');
-      setDrawingType(parseInt(e.key, 10)); // Set drawing type as 0 or 1
-      setIsDrawingIndicators(true);
-    } else if (e.key === '3') {
-      setDrawingType(null);
-      setIsDrawingIndicators(false);
-    }
-  }, [isDrawingRect]);
 
     const updateMask2dArr = useCallback((canvasPos, type) => {
       if (!mask2dArr || !layers) return;
