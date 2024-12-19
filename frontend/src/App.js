@@ -1,11 +1,11 @@
 import React, { useCallback, useState, useRef } from 'react';
 import { CssBaseline, Box , CircularProgress, Snackbar, Alert, Dialog, DialogTitle, DialogContent, DialogActions, Button, Select, MenuItem, FormControl, InputLabel, Typography} from '@mui/material';
-import OptionsBar from './components/OptionsBar';
-import Canvas from './components/Canvas';
-import CustomToolbar from './components/CustomToolbar';
-import ImageEditorMenuBar from './components/ImageEditorMenuBar';
-import LayersPanel from './components/LayersPanel';
-import { removeObject, resizeImage, blendImages , inpaintImage, inpaintDNN} from './services/api';
+import OptionsBar from './components/toolbar/OptionsBar';
+import Canvas from './components/canvas/Canvas';
+import CustomToolbar from './components/toolbar/CustomToolbar';
+import ImageEditorMenuBar from './components/menu/ImageEditorMenuBar';
+import LayersPanel from './components/layers/LayersPanel';
+import { removeObject, resizeImage, blendImages , inpaintImage, inpaintDNN} from './api/api';
 
 function App() {
   const canvasRef = useRef(null);

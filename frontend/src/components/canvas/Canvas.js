@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
 import { Box, Snackbar, Alert } from '@mui/material';
-import { selectObject, refineSelection } from '../services/api';
+import { selectObject, refineSelection } from '../../api/api';
 
 const handleSize = 8;
 
