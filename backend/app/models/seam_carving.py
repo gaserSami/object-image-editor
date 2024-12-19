@@ -30,7 +30,7 @@ def make_gif(intermediate_images, image):
 # CONSTANTS
 ########################################
 
-FACTOR = 1e5
+FACTOR = 1e4
 
 ########################################
 # CORE SEAM OPERATIONS
@@ -125,11 +125,22 @@ def add_seams(img, num_seams=1, protect_mask=None, forward=True):
 ########################################
 
 def compute_energy(img):
-    """Computes basic gradient energy"""
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) if len(img.shape) == 3 else img
-    grad_x = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=3)
-    grad_y = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=3)
-    energy = np.abs(grad_x) + np.abs(grad_y)
+    """Computes gradient energy across all color channels and sums them"""
+    if len(img.shape) == 2:  # Grayscale image
+        return np.abs(cv2.Sobel(img, cv2.CV_64F, 1, 0, ksize=3)) + np.abs(cv2.Sobel(img, cv2.CV_64F, 0, 1, ksize=3))
+    
+    # Initialize energy to zero
+    energy = np.zeros(img.shape[:2], dtype=np.float64)
+    
+    # Compute gradient energy for each channel and sum
+    for channel in range(img.shape[2]):
+        grad_x = cv2.Sobel(img[:, :, channel], cv2.CV_64F, 1, 0, ksize=3)
+        grad_y = cv2.Sobel(img[:, :, channel], cv2.CV_64F, 0, 1, ksize=3)
+        energy += np.abs(grad_x) + np.abs(grad_y)
+    
+    min = np.min(energy)
+    max = np.max(energy)
+    energy = (energy - min) / (max - min)
     return energy
 
 def cum_energy(img, protect_mask=None, remove_mask=None, forward=True):
@@ -142,7 +153,6 @@ def _backward_energy(img, protect_mask, remove_mask):
     """Helper function for backward energy computation"""
     energy = compute_energy(img)
     # normalize energy by dividing by max
-    energy = energy / energy.max()
     H, W = energy.shape
     M = energy.copy()
     backtrack_path = np.zeros((H, W), dtype=np.int32)
@@ -156,7 +166,7 @@ def _backward_energy(img, protect_mask, remove_mask):
     remove_mask = remove_mask.astype(np.float64)
 
     protect_mask *= FACTOR
-    remove_mask *= -FACTOR
+    remove_mask *= -FACTOR * 1e2
 
     M += protect_mask + remove_mask
     
@@ -193,7 +203,7 @@ def _forward_energy(img, protect_mask, remove_mask):
     remove_mask = remove_mask.astype(np.float64)
 
     protect_mask *= FACTOR
-    remove_mask *= -FACTOR
+    remove_mask *= -FACTOR * 1e2
 
     M[0] = M[0] + protect_mask[0] + remove_mask[0]
 
