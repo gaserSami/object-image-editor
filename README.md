@@ -140,6 +140,7 @@ Before running the project, ensure you have the following installed:
    - Contains main options: File, Edit, Image, Layer, Select, Filters, View
    - Currently implemented features:
      - File > Export: Exports the currently selected layer
+     - Export Canvas: Exports the current canvas state, including all layers and drawings
      - Other menu items are present but functionality is pending
 
 ### Advanced Selection Tools
@@ -186,8 +187,8 @@ Before running the project, ensure you have the following installed:
 2. **Selection Enhancement**:
    - Click "Enhance Selection" for initial automatic selection
    - Use indicator drawing mode for refinement:
-     - Press "1" key: Draw green lines for foreground
-     - Press "0" key: Draw red lines for background
+     - Press "1" key: Draw white lines for foreground
+     - Press "0" key: Draw black lines for background
      - Press "3" key: Exit drawing mode
    - Adjust brush size for more precise indicator drawing
    - Default iteration count is 5 (works well in most cases)
@@ -198,6 +199,9 @@ Before running the project, ensure you have the following installed:
    - Repeat enhancement process as needed
    - Add offset before creating final mask for safe margins in object removal
    - Full flexibility to move images under selection before finalizing
+
+4. **New Selection Method**:
+   - Activate a mask layer and press "s" to use a predefined mask for selection
 
 ### Advanced Tools
 
@@ -286,6 +290,9 @@ Before running the project, ensure you have the following installed:
    - Apply the seamless addition
    - Adjust if needed by trying different blending modes
 
+5. **Important Note**:
+- If the position of the source layer relative to the target layer changes, reselect the source layer as the source layer
+
 #### Retargeting Tool
 1. **Layer Selection Process**:
    - Select the retargeting tool from the toolbar
@@ -299,6 +306,7 @@ Before running the project, ensure you have the following installed:
      - Negative values: Reduce the image
    - Use keyboard keys to incrementally adjust percentages
    - Values represent the desired change relative to current size
+   - Alternatively, use a reference layer to match its size
 
 3. **Energy Calculation Options**:
    - Choose between:
@@ -314,6 +322,9 @@ Before running the project, ensure you have the following installed:
    - Click apply after setting desired parameters
    - Process maintains important image details
    - Avoids traditional scaling artifacts like stretching or compression
+
+6. **Duplicate Image Trick**:
+   - Create a duplicate of the image by retargeting it with 0 size changes
 
 #### Healing Tool
 1. **Layer Selection Process**:
@@ -361,6 +372,19 @@ Before running the project, ensure you have the following installed:
    - Provides visual flexibility during editing
    - Enables precise positioning for comparisons
    - Supports interactive adjustments without affecting final output
+
+4. **Mask Creation Trick**:
+   - Create a black mask with the same size as the image by creating a mask with 0 path
+
+5. **Canvas Export**:
+   - Export the canvas state from the File menu through "Export" canvas
+   - This will export the drawing and overlapping layers, useful for editing a mask
+   - Draw on the mask and then export the canvas
+
+6. **Drawing on Masks**:
+   - Use "0" and "1" keys for drawing on a mask or image
+   - Save the drawing by exporting the canvas
+   - Brush size is adjustable under the object selection tool
 
 ---
 
