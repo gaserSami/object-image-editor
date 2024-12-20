@@ -41,10 +41,10 @@ class SeamCarverService:
         if dx != 0:
             if dx < 0:
                 # Remove seams to decrease width
-                output = remove_seams(output, num_seams=abs(dx), protect_mask=protect_mask, forward=forward)
+                output, protect_mask = remove_seams(output, num_seams=abs(dx), protect_mask=protect_mask, forward=forward)
             else:
                 # Add seams to increase width
-                output = add_seams(output, num_seams=dx, protect_mask=protect_mask, forward=forward)
+                output, protect_mask = add_seams(output, num_seams=dx, protect_mask=protect_mask, forward=forward)
                 
         # Handle height change by rotating image 90 degrees
         if dy != 0:
@@ -54,10 +54,10 @@ class SeamCarverService:
             
             if dy < 0:
                 # Remove seams to decrease height
-                output = remove_seams(output, num_seams=abs(dy), protect_mask=protect_mask, forward=forward)
+                output, protect_mask = remove_seams(output, num_seams=abs(dy), protect_mask=protect_mask, forward=forward)
             else:
                 # Add seams to increase height
-                output = add_seams(output, num_seams=dy, protect_mask=protect_mask, forward=forward)
+                output, protect_mask = add_seams(output, num_seams=dy, protect_mask=protect_mask, forward=forward)
                 
             # Rotate image back to original orientation
             output = np.rot90(output, -1)
@@ -97,7 +97,7 @@ class SeamCarverService:
             protect_mask = protect_mask.astype(np.float64)
         
         # Perform object removal
-        output = remove_object(
+        output, protect_mask = remove_object(
             image, 
             remove_mask=object_mask, 
             protect_mask=protect_mask, 

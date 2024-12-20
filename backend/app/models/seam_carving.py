@@ -1,5 +1,56 @@
 import cv2
 import numpy as np
+import matplotlib.pyplot as plt
+import os
+import imageio.v2 as imageio
+
+# TODO: Remove this function
+# just for debugging
+def make_gif(intermediate_images):
+    # Create tmp directory if it doesn't exist
+    os.makedirs('tmp', exist_ok=True)
+    
+    # Generate unique filename
+    gif_path = os.path.join('tmp', f'seam_carving.gif')
+    
+    # Determine the maximum dimensions from the intermediate images
+    max_height = max(img.shape[0] for img in intermediate_images)
+    max_width = max(img.shape[1] for img in intermediate_images)
+    channels = 1 if len(intermediate_images[0].shape) == 2 else intermediate_images[0].shape[2]
+    
+    uint8_images = []
+    
+    for img in intermediate_images:
+        # Convert to float64 for normalization operations
+        img = img.astype(np.float64)
+        
+        # Handle normalized values (0-1 range)
+        if img.max() <= 1.0:
+            img = img * 255
+            
+        # Ensure consistent channel handling
+        if len(img.shape) != len(intermediate_images[0].shape):
+            if len(img.shape) == 2 and channels == 3:
+                img = np.stack((img,) * 3, axis=-1)  # Convert grayscale to RGB
+            elif len(img.shape) == 3 and channels == 1:
+                img = img[:,:,0]  # Convert RGB to grayscale
+                
+        # Create padded image with maximum dimensions
+        if channels == 1:
+            padded_img = np.zeros((max_height, max_width), dtype=np.uint8)
+        else:
+            padded_img = np.zeros((max_height, max_width, channels), dtype=np.uint8)
+            
+        h, w = img.shape[:2]
+        if channels == 1:
+            padded_img[:h, :w] = np.clip(img, 0, 255).astype(np.uint8)
+        else:
+            padded_img[:h, :w, :] = np.clip(img, 0, 255).astype(np.uint8)
+            
+        uint8_images.append(padded_img)
+    
+    imageio.mimsave(gif_path, uint8_images, duration=0.1)  # 0.1 seconds per frame
+    return gif_path
 
 def remove_seams(img, num_seams=0, protect_mask=None, remove_mask=None, forward=True):
     """Main function to remove seams either by count or based on removal mask.
@@ -36,7 +87,7 @@ def remove_seams(img, num_seams=0, protect_mask=None, remove_mask=None, forward=
             new_img, curr_remove_mask, curr_protect_mask, _ = _remove_single_seam(
                 img=new_img, protect_mask=curr_protect_mask, remove_mask=curr_remove_mask, forward=forward)
 
-    return new_img
+    return new_img, curr_protect_mask
 
 def _remove_single_seam(img, protect_mask, remove_mask, forward):
     """Helper function to remove a single seam.
@@ -156,7 +207,7 @@ def add_seams(img, num_seams=1, protect_mask=None, forward=True):
 
         final_img[h, :, :] = row_buffer
 
-    return final_img.astype(np.uint8)
+    return final_img.astype(np.uint8), tmp_mask
 
 def _compute_grad(img):
     """Computes gradient energy across all color channels and sums them.
@@ -479,7 +530,7 @@ def remove_object(mainImg, remove_mask, protect_mask=None, forward=True, directi
             protect_mask = np.rot90(protect_mask)
 
     # Perform seam removal
-    removed_img = remove_seams(
+    removed_img, protect_mask = remove_seams(
         img=mainImg, remove_mask=remove_mask, 
         protect_mask=protect_mask, forward=forward
     )
@@ -487,8 +538,10 @@ def remove_object(mainImg, remove_mask, protect_mask=None, forward=True, directi
     # Rotate the image back to its original orientation if it was rotated
     if should_rotate:
         removed_img = np.rot90(removed_img, -1)
+        if protect_mask is not None:
+            protect_mask = np.rot90(protect_mask, -1)
 
-    return removed_img
+    return removed_img, protect_mask
 
 def _get_factor():
     return 1e4
