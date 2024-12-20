@@ -1,100 +1,82 @@
 import cv2
 import numpy as np
-import matplotlib.pyplot as plt
-import imageio.v2 as imageio
-import os
-
-# temp for debugging
-def make_gif(intermediate_images, image):
-    # Create tmp directory if it doesn't exist
-        os.makedirs('tmp', exist_ok=True)
-        
-        # Generate unique filename
-        gif_path = os.path.join('tmp', f'seam_carving.gif')
-        
-        # Convert images to uint8 and pad smaller images to match the original size
-        uint8_images = []
-        original_shape = image.shape
-        for img in intermediate_images:
-            # Pad the image to match original dimensions
-            padded_img = np.zeros(original_shape, dtype=np.uint8)
-            h, w = img.shape[:2]
-            padded_img[:h, :w] = img.astype(np.uint8)
-            uint8_images.append(padded_img)
-            
-        imageio.mimsave(gif_path, uint8_images, duration=0.1)  # 0.1 seconds per frame
-        return gif_path
-
-
-########################################
-# CONSTANTS
-########################################
-
-FACTOR = 1e4
-
-########################################
-# CORE SEAM OPERATIONS
-########################################
 
 def remove_seams(img, num_seams=0, protect_mask=None, remove_mask=None, forward=True):
-    """Main function to remove seams either by count or based on removal mask"""
+    """Main function to remove seams either by count or based on removal mask.
+
+    Parameters:
+        img: Input image from which seams are to be removed.
+        num_seams: Number of seams to remove. If 0, remove based on the removal mask.
+        protect_mask: Mask indicating areas to protect from seam removal.
+        remove_mask: Mask indicating areas to prioritize for seam removal.
+        forward: Boolean indicating whether to use forward energy computation.
+
+    Returns:
+        new_img: Image after seam removal.
+        removed_seams: List of removed seam paths.
+    """
+    # Return early if the image is None
     if img is None:
-        return img, [], []
-    try:
-        gray = cv2.cvtColor(img.astype(np.uint8), cv2.COLOR_BGR2GRAY) if len(img.shape) == 3 else img.copy()
-        removed_seams = []
-        intermediate_images = [img.copy()]
-        new_img = img.copy()
-        curr_protect_mask = protect_mask.copy() if protect_mask is not None else None
-        curr_remove_mask = remove_mask.copy() if remove_mask is not None else None
-        
-        # Determine number of seams to remove
-        if num_seams == 0:
-            # save the curr_remove_mask before removing seams to tmp/ as image
-            while np.any(curr_remove_mask):
-                cv2.imwrite('tmp/remove_mask.png', (curr_remove_mask * 255).astype(np.uint8))
-                new_img, gray, curr_remove_mask, curr_protect_mask, seam = _remove_single_seam(
-                    new_img, gray, curr_protect_mask, curr_remove_mask, forward)
-                removed_seams.append(seam)
-                intermediate_images.append(curr_remove_mask.copy())
-        else:
-            for _ in range(num_seams):
-                new_img, gray, curr_remove_mask, curr_protect_mask, seam = _remove_single_seam(
-                new_img, gray, curr_protect_mask, curr_remove_mask, forward)
-                removed_seams.append(seam)
-                intermediate_images.append(new_img.copy())
-    except:
-        gif_path = make_gif(intermediate_images=intermediate_images, image=img)
-        print(gif_path)
-        return None, [], intermediate_images
+        return img, []
 
-    return new_img, removed_seams, intermediate_images
+    # Initialize variables
+    new_img = img.copy()
+    curr_protect_mask = protect_mask.copy() if protect_mask is not None else None
+    curr_remove_mask = remove_mask.copy() if remove_mask is not None else None
 
-def _remove_single_seam(img, gray, protect_mask, remove_mask, forward):
-    """Helper function to remove a single seam"""
-    cum_energyy, backtrack_path = cum_energy(gray, protect_mask=protect_mask, 
-                                           remove_mask=remove_mask, forward=forward)
-    boolean_path, coords_path = getMinPathMask(backtrack_path, cum_energyy)
-    new_img, new_remove_mask, new_protect_mask, _ = remove_path(
-        img, remove_mask=remove_mask, protection_mask=protect_mask,
-        boolean_path=boolean_path, path=coords_path)
-    new_gray = cv2.cvtColor(new_img.astype(np.uint8), cv2.COLOR_BGR2GRAY)
-    return new_img, new_gray, new_remove_mask, new_protect_mask, coords_path
+    # Remove seams based on the number of seams or removal mask
+    if num_seams == 0:
+        # Remove seams until the removal mask is empty
+        while np.any(curr_remove_mask):
+            new_img, curr_remove_mask, curr_protect_mask, _ = _remove_single_seam(
+                img=new_img, protect_mask=curr_protect_mask, remove_mask=curr_remove_mask, forward=forward)
+    else:
+        # Remove a specified number of seams
+        for _ in range(num_seams):
+            new_img, curr_remove_mask, curr_protect_mask, _ = _remove_single_seam(
+                img=new_img, protect_mask=curr_protect_mask, remove_mask=curr_remove_mask, forward=forward)
+
+    return new_img
+
+def _remove_single_seam(img, protect_mask, remove_mask, forward):
+    """Helper function to remove a single seam.
+
+    Parameters:
+        img: The current image from which a seam is to be removed.
+        protect_mask: Mask indicating areas to protect from seam removal.
+        remove_mask: Mask indicating areas to prioritize for seam removal.
+        forward: Boolean indicating whether to use forward energy computation.
+
+    Returns:
+        new_img: Image after a single seam removal.
+        new_remove_mask: Updated remove mask after seam removal.
+        new_protect_mask: Updated protect mask after seam removal.
+        coords_path: Coordinates of the removed seam path.
+    """
+    # Compute cumulative energy map and backtrack map
+    cum_energy_map, backtrack_map = _cum_energy(
+        img, protect_mask=protect_mask, remove_mask=remove_mask, forward=forward
+    )
+
+    # Determine the path of the minimum energy seam
+    coords_path = _get_min_path(backtrack_map, cum_energy_map)
+
+    # Remove the identified seam path from the image and masks
+    new_imgs = _remove_path_from_imgs(
+        imgs=[img, remove_mask, protect_mask], path=coords_path
+    )
+
+    # Return the updated image, masks, and seam path
+    return new_imgs[0], new_imgs[1], new_imgs[2], coords_path
 
 def add_seams(img, num_seams=1, protect_mask=None, forward=True):
     """Main function to add seams to enlarge an image."""
-    original_img = img.copy().astype(np.float64)
-    H, W = original_img.shape[:2]
-    C = original_img.shape[2] if len(original_img.shape) == 3 else 1
+    orig_img = img.copy().astype(np.float64)
+    H, W = orig_img.shape[:2]
+    C = orig_img.shape[2] if len(orig_img.shape) == 3 else 1
 
     # Prepare a mask for removed seams
     removed_seams_mask = np.zeros((H, W), dtype=np.float64)
-
-    # Convert to grayscale if needed
-    if len(img.shape) == 3:
-        gray = cv2.cvtColor(img.astype(np.uint8), cv2.COLOR_BGR2GRAY)
-    else:
-        gray = img.copy()
 
     # Temporary copies for seam removal
     tmp_img = img.copy()
@@ -106,27 +88,27 @@ def add_seams(img, num_seams=1, protect_mask=None, forward=True):
 
     # Identify all seams to be inserted
     for i in range(num_seams):
-        cum_energy_map, backtrack_path = cum_energy(gray, protect_mask=tmp_mask, forward=forward)
-        boolean_path, coords_path = getMinPathMask(backtrack_path, cum_energy_map)
+        cum_energy_map, backtrack_map = _cum_energy(tmp_img, protect_mask=tmp_mask, forward=forward)
+        coords_path = _get_min_path(backtrack_map, cum_energy_map)
 
         # Map coords_path to original indices BEFORE removing the path
         updated_path = coords_path.copy()
         updated_path[:, 1] = tmp_idx_map[coords_path[:, 0], coords_path[:, 1]]
 
         # Now remove the path from tmp_img and update tmp_idx_map
-        tmp_img, _, tmp_mask, tmp_idx_map = remove_path(
-            tmp_img,
-            remove_mask=None,
-            protection_mask=tmp_mask,
-            boolean_path=boolean_path,
+        new_imgs = _remove_path_from_imgs(
+            imgs=[tmp_img, tmp_mask, tmp_idx_map],
             path=coords_path,
-            idx_map=tmp_idx_map
         )
+
+        # Update references
+        tmp_img = new_imgs[0]
+        tmp_mask = new_imgs[1]
+        tmp_idx_map = new_imgs[2]
 
         # Update other references
         removed_seams[i] = updated_path
         removed_seams_mask[updated_path[:, 0], updated_path[:, 1]] = 1
-        gray = cv2.cvtColor(tmp_img.astype(np.uint8), cv2.COLOR_BGR2GRAY)
 
     # Build the final image by inserting seams
     final_width = W + num_seams
@@ -152,18 +134,18 @@ def add_seams(img, num_seams=1, protect_mask=None, forward=True):
 
         while original_col_idx < W:
             # Copy original pixel to final image
-            row_buffer[final_col_idx, :] = original_img[h, original_col_idx, :]
+            row_buffer[final_col_idx, :] = orig_img[h, original_col_idx, :]
 
             # Check if the next seam to insert is at this column
             if seam_idx < len(seam_cols) and seam_cols[seam_idx] == original_col_idx:
                 # We need to insert a pixel right after this column
                 # Average between current pixel and the next one (or handle boundary)
                 if original_col_idx < W - 1:
-                    new_val = (original_img[h, original_col_idx, :] + original_img[h, original_col_idx + 1, :]) / 2.0
+                    new_val = (orig_img[h, original_col_idx, :] + orig_img[h, original_col_idx + 1, :]) / 2.0
                 else:
                     # At the right boundary, average with the previous pixel
                     # This case usually doesn't happen with seam insertion, but just in case:
-                    new_val = (original_img[h, original_col_idx, :] + original_img[h, original_col_idx - 1, :]) / 2.0
+                    new_val = (orig_img[h, original_col_idx, :] + orig_img[h, original_col_idx - 1, :]) / 2.0
 
                 final_col_idx += 1
                 row_buffer[final_col_idx, :] = new_val
@@ -174,277 +156,339 @@ def add_seams(img, num_seams=1, protect_mask=None, forward=True):
 
         final_img[h, :, :] = row_buffer
 
-    return final_img.astype(np.uint8), None
+    return final_img.astype(np.uint8)
 
+def _compute_grad(img):
+    """Computes gradient energy across all color channels and sums them.
 
-########################################
-# ENERGY COMPUTATION
-########################################
+    Parameters:
+        img: Input image, can be grayscale or color.
 
-def compute_energy(img):
-    """Computes gradient energy across all color channels and sums them"""
-    if len(img.shape) == 2:  # Grayscale image
-        return np.abs(cv2.Sobel(img, cv2.CV_64F, 1, 0, ksize=3)) + np.abs(cv2.Sobel(img, cv2.CV_64F, 0, 1, ksize=3))
-    
-    # Initialize energy to zero
+    Returns:
+        energy: Normalized gradient energy map of the image.
+    """
+    # Check if the image is grayscale
+    if len(img.shape) == 2:
+        # Compute gradient energy for a grayscale image
+        grad_x = cv2.Sobel(img, cv2.CV_64F, 1, 0, ksize=3)
+        grad_y = cv2.Sobel(img, cv2.CV_64F, 0, 1, ksize=3)
+        return np.abs(grad_x) + np.abs(grad_y)
+
+    # Initialize energy map for a color image
     energy = np.zeros(img.shape[:2], dtype=np.float64)
-    
-    # Compute gradient energy for each channel and sum
+
+    # Compute gradient energy for each color channel and sum them
     for channel in range(img.shape[2]):
         grad_x = cv2.Sobel(img[:, :, channel], cv2.CV_64F, 1, 0, ksize=3)
         grad_y = cv2.Sobel(img[:, :, channel], cv2.CV_64F, 0, 1, ksize=3)
         energy += np.abs(grad_x) + np.abs(grad_y)
-    
-    min = np.min(energy)
-    max = np.max(energy)
-    energy = (energy - min) / (max - min)
+
+    # Normalize the energy map to the range [0, 1]
+    min_energy = np.min(energy)
+    max_energy = np.max(energy)
+    energy = (energy - min_energy) / (max_energy - min_energy)
+
     return energy
 
-def cum_energy(img, protect_mask=None, remove_mask=None, forward=True):
+def _cum_energy(img, protect_mask=None, remove_mask=None, forward=True):
     """Computes cumulative energy matrix"""
     if not forward:
         return _backward_energy(img, protect_mask, remove_mask)
     return _forward_energy(img, protect_mask, remove_mask)
 
 def _backward_energy(img, protect_mask, remove_mask):
-    """Helper function for backward energy computation"""
-    energy = compute_energy(img)
-    # normalize energy by dividing by max
-    H, W = energy.shape
-    M = energy.copy()
-    backtrack_path = np.zeros((H, W), dtype=np.int32)
+    """Helper function for backward energy computation.
 
-    if protect_mask is None:
-        protect_mask = np.zeros((H, W), dtype=np.float64)
-    if remove_mask is None:
-        remove_mask = np.zeros((H, W), dtype=np.float64)
+    Parameters:
+        img: Input image for which the energy map is computed.
+        protect_mask: Mask indicating areas to protect from seam removal.
+        remove_mask: Mask indicating areas to prioritize for seam removal.
 
-    protect_mask = protect_mask.astype(np.float64)
-    remove_mask = remove_mask.astype(np.float64)
-
-    protect_mask *= FACTOR
-    remove_mask *= -FACTOR * 1e2
-
-    M += protect_mask + remove_mask
+    Returns:
+        cum_energy_map: Cumulative energy map.
+        backtrack_map: Map used to backtrack the minimum energy seam.
+    """
+    # Compute the gradient energy of the image
+    energy = _compute_grad(img)
     
+    # Initialize dimensions and cumulative energy map
+    H, W = energy.shape
+    cum_energy_map = energy.copy()
+    backtrack_map = np.empty((H, W), dtype=np.int32)
+
+    # Get the factor
+    factor = _get_factor()
+
+    # Apply protect mask to the energy map
+    if protect_mask is not None:
+        protect_mask = np.where(protect_mask > 0, factor, protect_mask)
+        cum_energy_map += protect_mask
+    # Apply remove mask to the energy map
+    if remove_mask is not None:
+        remove_mask = np.where(remove_mask > 0, -factor * 1e2, remove_mask)
+        cum_energy_map += remove_mask
+    
+    # Compute cumulative energy and backtrack map
     for i in range(1, H):
-        prev_row = np.pad(M[i - 1], (1, 1), mode='constant', constant_values=np.inf)
+        # Pad the previous row to handle edge cases
+        prev_row = np.pad(cum_energy_map[i - 1], (1, 1), mode='constant', constant_values=np.inf)
         left = prev_row[:-2]
         center = prev_row[1:-1]
         right = prev_row[2:]
+        
+        # Stack left, center, and right for comparison
         lcr = np.array([left, center, right])
-        min_choices = np.argmin(lcr, axis=0) # 0 = left, 1 = center, 2 = right
-        backtrack_path[i] = min_choices - 1
-        M[i] += np.choose(min_choices, lcr)
+        
+        # Determine the minimum energy path
+        min_choices = np.argmin(lcr, axis=0)  # 0 = left, 1 = center, 2 = right
+        backtrack_map[i] = min_choices - 1
+        
+        # Update the cumulative energy map
+        cum_energy_map[i] += np.choose(min_choices, lcr)
 
-    return M, backtrack_path
+    return cum_energy_map, backtrack_map
 
 def _forward_energy(img, protect_mask, remove_mask):
-    """Helper function for forward energy computation"""
+    """Helper function for forward energy computation.
+
+    Parameters:
+        img: Input image for which the energy map is computed.
+        protect_mask: Mask indicating areas to protect from seam removal.
+        remove_mask: Mask indicating areas to prioritize for seam removal.
+
+    Returns:
+        cum_energy_map: Cumulative energy map.
+        backtrack_map: Map used to backtrack the minimum energy seam.
+    """
+    # Convert image to grayscale if it's a color image
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) if len(img.shape) == 3 else img
-    gray_padded = np.pad(gray, pad_width=1, mode='edge')
+
+    # Pad the grayscale image to handle edge cases
+    gray_paded = np.pad(gray, pad_width=1, mode='edge')
     H, W = gray.shape
-    backtrack_path = np.zeros((H, W), dtype=np.int32)
-    curr_r = gray_padded[0, 2:]
-    curr_l = gray_padded[0, :-2]
+
+    # Initialize backtrack map and cumulative energy map
+    backtrack_map = np.empty((H, W), dtype=np.int32)
+    cum_energy_map = np.zeros((H, W), dtype=np.float64)
+
+    # Compute initial energy for the first row
+    curr_r = gray_paded[0, 2:]
+    curr_l = gray_paded[0, :-2]
     CU = np.abs(curr_r - curr_l)
-    M = np.zeros((H, W), dtype=np.float64)
-    M[0] = CU
+    cum_energy_map[0] = CU
 
-    if protect_mask is None:
-        protect_mask = np.zeros((H, W), dtype=np.float64)
-    if remove_mask is None:
-        remove_mask = np.zeros((H, W), dtype=np.float64)
+    # Get the factor
+    factor = _get_factor()
 
-    protect_mask = protect_mask.astype(np.float64)
-    remove_mask = remove_mask.astype(np.float64)
+    # Apply protect mask to the energy map  
+    if protect_mask is not None:
+        protect_mask = np.where(protect_mask > 0, factor, protect_mask)
+        cum_energy_map += protect_mask
+    # Apply remove mask to the energy map
+    if remove_mask is not None:
+        remove_mask = np.where(remove_mask > 0, -factor * 1e2, remove_mask)
+        cum_energy_map += remove_mask
 
-    protect_mask *= FACTOR
-    remove_mask *= -FACTOR * 1e2
-
-    M[0] = M[0] + protect_mask[0] + remove_mask[0]
-
+    # Compute cumulative energy and backtrack map for each row
     for i in range(1, H):
-        curr_r = gray_padded[i, 2:]
-        curr_l = gray_padded[i, :-2]
+        curr_r = gray_paded[i, 2:]
+        curr_l = gray_paded[i, :-2]
         CU = np.abs(curr_r - curr_l)
         prev_row_U = gray[i - 1]
         CL = np.abs(prev_row_U - curr_l) + CU
         CR = np.abs(prev_row_U - curr_r) + CU
-        prev_row = np.pad(M[i - 1], (1, 1), mode='constant', constant_values=np.inf)
+
+        # Pad the previous row of the cumulative energy map
+        prev_row = np.pad(cum_energy_map[i - 1], (1, 1), mode='constant', constant_values=np.inf)
         left = prev_row[:-2]
         center = prev_row[1:-1]
         right = prev_row[2:]
+
+        # Stack left, center, and right for comparison
         lcr = np.array([left, center, right])
         lcr += np.array([CL, CU, CR])
-        min_choices = np.argmin(lcr, axis=0) # 0 = left, 1 = center, 2 = right
-        backtrack_path[i] = min_choices - 1
-        M[i] += np.choose(min_choices, lcr) + protect_mask[i] + remove_mask[i]
 
-    return M, backtrack_path
+        # Determine the minimum energy path
+        min_choices = np.argmin(lcr, axis=0)  # 0 = left, 1 = center, 2 = right
+        backtrack_map[i] = min_choices - 1
 
-########################################
-# PATH OPERATIONS
-########################################
+        # Update the cumulative energy map
+        cum_energy_map[i] += np.choose(min_choices, lcr)
 
-def remove_path(img, path, boolean_path=None, remove_mask=None, protection_mask=None, idx_map=None):
-    """Removes a seam path from image and associated masks"""
-    H, W, C = img.shape 
-    new_img = np.zeros((H, W - 1, C), dtype=np.float64)
-    new_remove_mask = None 
-    new_protection_mask = None
-    new_idx_map = None
-    
-    if remove_mask is not None:
-        new_remove_mask = np.zeros((H, W - 1), dtype=np.float64)
-    if protection_mask is not None:
-        new_protection_mask = np.zeros((H, W - 1), dtype=np.float64)
-    if idx_map is not None:
-        new_idx_map = np.zeros((H, W - 1), dtype=np.int32)
+    return cum_energy_map, backtrack_map
 
-    for y, x in path:
-        new_img[y, :x, :] = img[y, :x, :]
-        new_img[y, x:, :] = img[y, x+1:, :]
-        if remove_mask is not None:
-            new_remove_mask[y, :x] = remove_mask[y, :x]
-            new_remove_mask[y, x:] = remove_mask[y, x+1:]
-        if protection_mask is not None:
-            new_protection_mask[y, :x] = protection_mask[y, :x]
-            new_protection_mask[y, x:] = protection_mask[y, x+1:]
-        if idx_map is not None:
-            new_idx_map[y, :x] = idx_map[y, :x]
-            new_idx_map[y, x:] = idx_map[y, x+1:]
 
-    return new_img, new_remove_mask, new_protection_mask, new_idx_map
+def _remove_path_from_imgs(imgs, path):
+    """Removes a seam path from image and associated masks.
 
-def insert_seam(img, path, boolean_path=None, protection_mask=None):
-    """Inserts a seam path into image"""
-    H, W, C = img.shape
-    new_img = np.zeros((H, W + 1, C), dtype=img.dtype)
-    new_protection_mask = None
+    Parameters:
+        imgs: List of images and masks from which the seam path is to be removed.
+        path: Coordinates of the seam path to be removed.
 
-    if protection_mask is not None:
-        new_protection_mask = np.zeros((H, W + 1), dtype=np.uint8)
-
-    for y, x in path:
-        if x == 0:
-            new_img[y,x,:] = img[y,x,:]
-            new_val = ((img[y,x,:].astype(np.float32) + img[y,x+1,:].astype(np.float32)) / 2).astype(np.uint8)
-            new_img[y,x+1,:] = new_val
-            new_img[y,x+1:,:] = img[y,x:,:]
-            if protection_mask is not None:
-                new_protection_mask[y,x] = protection_mask[y,x]
-                new_protection_mask[y,x+1] = max(protection_mask[y,x], protection_mask[y,x+1])
-                new_protection_mask[y,x+1:] = protection_mask[y,x:]
+    Returns:
+        new_imgs: List of images and masks after seam removal.
+    """
+    # Initialize new images with one less column for each image
+    new_imgs = []
+    for img in imgs:
+        if img is not None:
+            H, W = img.shape[:2]
+            if len(img.shape) == 3:
+                new_img = np.zeros((H, W - 1, img.shape[2]), dtype=img.dtype)
+            else:
+                new_img = np.zeros((H, W - 1), dtype=img.dtype)
+            new_imgs.append(new_img)
         else:
-            new_img[y, :x, :] = img[y, :x, :]
-            new_val = ((img[y, x, :].astype(np.float32) + img[y, x - 1, :].astype(np.float32)) / 2).astype(np.uint8)
-            new_img[y, x, :] = new_val
-            new_img[y, x + 1:, :] = img[y, x:, :]
-            if protection_mask is not None:
-                new_protection_mask[y, :x] = protection_mask[y, :x]
-                new_protection_mask[y, x] = max(protection_mask[y, x], protection_mask[y, x - 1])
-                new_protection_mask[y, x + 1:] = protection_mask[y, x:]
+            new_imgs.append(None)
 
-    return new_img, new_protection_mask
+    # Iterate over each coordinate in the path
+    for y, x in path:
+        for i, img in enumerate(imgs):
+            if img is not None:
+                # Handle multi-channel and single-channel images
+                if len(img.shape) == 3:
+                    new_imgs[i][y, :x, :] = img[y, :x, :]
+                    new_imgs[i][y, x:, :] = img[y, x+1:, :]
+                else:
+                    new_imgs[i][y, :x] = img[y, :x]
+                    new_imgs[i][y, x:] = img[y, x+1:]
 
-def getMinPathMask(backtrack_path, cum_energy):
-    """Finds minimum energy seam path"""
-    H, W = backtrack_path.shape
-    path = np.empty((H,2), dtype=np.int64)
-    x = cum_energy[-1].argmin()
-    mask = np.zeros((H, W), np.uint8)
+    return new_imgs
 
+def _get_min_path(backtrack_map, cum_energy_map):
+    """Finds the minimum energy seam path.
+
+    Parameters:
+        backtrack_map: Map used to backtrack the minimum energy seam.
+        cum_energy_map: Cumulative energy map.
+
+    Returns:
+        path: Coordinates of the minimum energy seam path.
+    """
+    # Get the dimensions of the backtrack map
+    H, W = backtrack_map.shape
+
+    # Initialize the path array to store seam coordinates
+    path = np.empty((H, 2), dtype=np.int64)
+
+    # Start from the position with the minimum energy in the last row
+    x = cum_energy_map[-1].argmin()
+
+    # Backtrack from the bottom to the top of the image
     for i in range(H - 1, -1, -1):
+        # Store the current position in the path
         path[i] = (i, x)
-        mask[i, x] = 1
-        x = x + backtrack_path[i, x]
+
+        # Update x to the next position in the seam path
+        x += backtrack_map[i, x]
+
+        # Ensure x stays within image bounds
         x = max(0, min(W - 1, x))
 
-    return mask, path # boolean_path, coords_path
+    return path
 
-########################################
-# UTILITY FUNCTIONS
-########################################
+def _get_masked_obj_dimensions(mask):
+    """Gets dimensions of the masked object.
 
-def get_masked_obj_dimensions(mask):
-    """Gets dimensions of masked object"""
+    Parameters:
+        mask: A binary mask where the object is marked.
+
+    Returns:
+        width: Width of the masked object.
+        height: Height of the masked object.
+    """
+    # Return zero dimensions if the mask is None
     if mask is None:
         return 0, 0
+
+    # Convert the mask to a numpy array
     mask = np.asarray(mask)
-    
+
+    # Find the indices where the mask is non-zero
     y_indices, x_indices = np.where(mask)
-    
+
+    # Check if there are no non-zero indices
     if len(x_indices) == 0 or len(y_indices) == 0:
         return 0, 0
-    else:
-        width = x_indices.max() - x_indices.min() + 1
-        height = y_indices.max() - y_indices.min() + 1
-        return width, height
 
-def draw_seam(img, coords_path):
-    """Debug function to visualize seam"""
-    seam = np.copy(img)
-    for y,x in coords_path:
-            seam[y, x] = 255
-    return seam
+    # Calculate the width and height of the masked object
+    width = x_indices.max() - x_indices.min() + 1
+    height = y_indices.max() - y_indices.min() + 1
 
-########################################
-# PUBLIC INTERFACE
-########################################
+    return width, height
 
-def compute_rotation_decision(img, remove_mask):
-    """Determine if rotation is needed based on gradient energy analysis"""
-    # Calculate gradients in both directions
+
+def _compute_rotation_decision(img, remove_mask):
+    """Determine if rotation is needed based on gradient energy analysis.
+
+    Parameters:
+        img: Input image for analysis.
+        remove_mask: Mask indicating the area to be removed.
+
+    Returns:
+        bool: True if rotation is needed, False otherwise.
+    """
+    # Calculate gradients in both horizontal and vertical directions
     grad_x = cv2.Sobel(img, cv2.CV_64F, 1, 0, ksize=3)
     grad_y = cv2.Sobel(img, cv2.CV_64F, 0, 1, ksize=3)
-    
+
     # Calculate average energy in both directions within the mask
     mask_3d = np.stack([remove_mask] * 3, axis=-1)
     horizontal_energy = np.mean(np.abs(grad_x)[mask_3d == 1])
     vertical_energy = np.mean(np.abs(grad_y)[mask_3d == 1])
-    
-    # Get dimensions of the object
-    w, h = get_masked_obj_dimensions(remove_mask)
-    
-    # Consider both energy and dimensions in decision
+
+    # Get dimensions of the object within the mask
+    w, h = _get_masked_obj_dimensions(remove_mask)
+
+    # Consider both energy and dimensions in the decision
     energy_ratio = horizontal_energy / vertical_energy
     dimension_ratio = w / h
-    
+
     # Rotate if vertical energy is significantly lower and width is larger
     # or if horizontal energy is much stronger despite dimensions
     return energy_ratio > 1.2 or (dimension_ratio > 1.5 and energy_ratio > 0.8)
 
-def remove(mainImg, remove_mask, protect_mask=None, forward=True, direction="auto"):
+def remove_object(mainImg, remove_mask, protect_mask=None, forward=True, direction="auto"):
     """
-    Main public interface for object removal
-    
+    Main public interface for object removal.
+
     Parameters:
-        mainImg: Input image
-        remove_mask: Mask of area to remove
-        protect_mask: Mask of area to protect (optional)
-        forward: Whether to use forward energy (default: True)
-        direction: Forced direction for seam removal ('vertical', 'horizontal', or "auto" for auto)
+        mainImg: Input image from which objects are to be removed.
+        remove_mask: Mask indicating the area to be removed.
+        protect_mask: Mask indicating the area to be protected (optional).
+        forward: Boolean indicating whether to use forward energy computation (default: True).
+        direction: Direction for seam removal ('vertical', 'horizontal', or 'auto' for automatic detection).
+
+    Returns:
+        removed_img: Image after object removal.
+        removed_seams: List of removed seam paths.
     """
+    # Determine if rotation is needed based on the specified or automatic direction
     if direction != "auto":
         # Use specified direction
         should_rotate = direction.lower() == 'horizontal'
     else:
         # Use automatic direction detection
-        should_rotate = compute_rotation_decision(mainImg, remove_mask)
-    
+        should_rotate = _compute_rotation_decision(mainImg, remove_mask)
+
+    # Rotate the image and masks if needed
     if should_rotate:
         mainImg = np.rot90(mainImg)
         remove_mask = np.rot90(remove_mask)
         if protect_mask is not None:
             protect_mask = np.rot90(protect_mask)
-    
-    removed_img, removed_seams, intermediate_images = remove_seams(
-        img=mainImg, remove_mask=remove_mask, 
-        protect_mask=protect_mask, forward=forward)
 
+    # Perform seam removal
+    removed_img = remove_seams(
+        img=mainImg, remove_mask=remove_mask, 
+        protect_mask=protect_mask, forward=forward
+    )
+
+    # Rotate the image back to its original orientation if it was rotated
     if should_rotate:
         removed_img = np.rot90(removed_img, -1)
-        intermediate_images = [np.rot90(img, -1) for img in intermediate_images]
 
-    return removed_img, removed_seams, intermediate_images
+    return removed_img
+
+def _get_factor():
+    return 1e4

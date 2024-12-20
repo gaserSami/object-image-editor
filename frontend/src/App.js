@@ -33,6 +33,7 @@ function App() {
   const [retargetMode, setRetargetMode] = useState('percentage');
   const [referenceLayerId, setReferenceLayerId] = useState(null);
   const [direction, setDirection] = useState("auto"); 
+  const [considerScale, setConsiderScale] = useState(false);
 
   const handleSnackbarClose = () => {
     setSnackbarOpen(false);
@@ -288,11 +289,6 @@ function App() {
     let newWidth, newHeight;
     
     if (retargetMode === 'percentage') {
-      if(retargetHeight === 0 && retargetWidth === 0){
-        setSnackbarMessage("Please enter a valid retarget height and width.");
-        setSnackbarOpen(true);
-        return;
-      }
       // Calculate new dimensions based on percentage
       newWidth = targetLayer.image.width + (retargetWidth * targetLayer.image.width / 100);
       newHeight = targetLayer.image.height + (retargetHeight * targetLayer.image.height / 100);
@@ -304,8 +300,13 @@ function App() {
         setSnackbarOpen(true);
         return;
       }
-      newWidth = referenceLayer.image.width;
-      newHeight = referenceLayer.image.height;
+      if(!considerScale){
+        newWidth = referenceLayer.image.width;
+        newHeight = referenceLayer.image.height;
+      }else{
+        newWidth = referenceLayer.image.width * (referenceLayer.scaleX || referenceLayer.scale);
+        newHeight = referenceLayer.image.height * (referenceLayer.scaleY || referenceLayer.scale);
+      }
     }
     
     setIsLoading(true);
@@ -334,7 +335,7 @@ function App() {
         setSnackbarOpen(true);
         setIsLoading(false);
       });
-  }, [layers, maskLayer, protectionLayer, retargetHeight, retargetWidth, targetLayer, isForward, retargetMode, referenceLayerId, setLayers, setSelectedLayerId, setIsLoading]);
+  }, [layers, maskLayer, protectionLayer, retargetHeight, retargetWidth, targetLayer, isForward, retargetMode, referenceLayerId, considerScale]);
 
   const onSelect = useCallback(() => {
     if (canvasRef.current?.onSelect) {
@@ -579,6 +580,8 @@ function App() {
         onRetargetModeChange={handleRetargetModeChange}
         direction={direction}
         setDirection={setDirection}
+        considerScale={considerScale}
+        setConsiderScale={setConsiderScale}
       />
       <Box display="flex" height="calc(100vh - 88px)" bgcolor="background.default">
         <CustomToolbar onSelectTool={setSelectedTool} selectedTool={selectedTool}

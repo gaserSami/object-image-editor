@@ -34,7 +34,9 @@ const OptionsBar = memo(function OptionsBar({ selectedTool, onCreateMask,
   retargetMode,
   onRetargetModeChange,
   direction,
-  setDirection
+  setDirection,
+  considerScale,
+  setConsiderScale
 }) {
   const getToolIcon = useCallback(() => {
     switch (selectedTool) {
@@ -431,6 +433,15 @@ const OptionsBar = memo(function OptionsBar({ selectedTool, onCreateMask,
                   ))}
                 </Select>
               )}
+              <Switch
+                checked={considerScale}
+                onChange={(e) => setConsiderScale(e.target.checked)}
+                size="small"
+                color="primary"
+              />
+              <Typography variant="body2" sx={{ fontSize: '0.75rem' }}>
+                Consider Scale
+              </Typography>
             </Box>
             <Switch
               checked={isForward}
