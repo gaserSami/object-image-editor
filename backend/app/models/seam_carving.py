@@ -82,43 +82,100 @@ def _remove_single_seam(img, gray, protect_mask, remove_mask, forward):
     return new_img, new_gray, new_remove_mask, new_protect_mask, coords_path
 
 def add_seams(img, num_seams=1, protect_mask=None, forward=True):
-    """Main function to add seams to an image"""
-    new_img = img.copy()
+    """Main function to add seams to enlarge an image."""
+    original_img = img.copy().astype(np.float64)
+    H, W = original_img.shape[:2]
+    C = original_img.shape[2] if len(original_img.shape) == 3 else 1
+
+    # Prepare a mask for removed seams
+    removed_seams_mask = np.zeros((H, W), dtype=np.float64)
+
+    # Convert to grayscale if needed
     if len(img.shape) == 3:
         gray = cv2.cvtColor(img.astype(np.uint8), cv2.COLOR_BGR2GRAY)
     else:
         gray = img.copy()
 
-    new_mask = protect_mask.copy() if protect_mask is not None else None
-
-    # Store seams and their insertion positions
+    # Temporary copies for seam removal
     tmp_img = img.copy()
-    tmp_mask = protect_mask.copy() if protect_mask is not None else np.zeros((img.shape[0], img.shape[1]), dtype=np.float64)
-    H,W = tmp_img.shape[:2]
-    removed_seams = []
-    idx_map = np.tile(np.arange(W), (H, 1))
-    tmp_idx_map = idx_map.copy()
-    # Find and store all seams first
-    for _ in range(num_seams):
-        cum_energyy, backtrack_path = cum_energy(gray, protect_mask=tmp_mask, forward=forward)
-        boolean_path, coords_path = getMinPathMask(backtrack_path, cum_energyy)
-        tmp_img, _, tmp_mask, tmp_idx_map = remove_path(tmp_img, 
-                                            remove_mask=None,
-                                            protection_mask=tmp_mask, 
-                                            boolean_path=boolean_path,
-                                            path=coords_path,
-                                            idx_map=tmp_idx_map
-                                            )
-        updated_path = coords_path.copy()
-        updated_path[:, 1] = idx_map[coords_path[:, 0], coords_path[:, 1]]
-        gray = cv2.cvtColor(tmp_img.astype(np.uint8), cv2.COLOR_BGR2GRAY)
-        removed_seams.append(updated_path)
+    tmp_mask = protect_mask.copy() if protect_mask is not None else np.zeros((H, W), dtype=np.float64)
+    tmp_idx_map = np.tile(np.arange(W), (H, 1))
 
-    # Insert the seams
-    for seam in removed_seams:
-        new_img, new_mask = insert_seam(new_img, seam, protection_mask=new_mask)
+    # Array to store the removed seams. Each seam is (H,2): (row, original_col)
+    removed_seams = np.empty((num_seams, H, 2), dtype=np.int64)
+
+    # Identify all seams to be inserted
+    for i in range(num_seams):
+        cum_energy_map, backtrack_path = cum_energy(gray, protect_mask=tmp_mask, forward=forward)
+        boolean_path, coords_path = getMinPathMask(backtrack_path, cum_energy_map)
+
+        # Map coords_path to original indices BEFORE removing the path
+        updated_path = coords_path.copy()
+        updated_path[:, 1] = tmp_idx_map[coords_path[:, 0], coords_path[:, 1]]
+
+        # Now remove the path from tmp_img and update tmp_idx_map
+        tmp_img, _, tmp_mask, tmp_idx_map = remove_path(
+            tmp_img,
+            remove_mask=None,
+            protection_mask=tmp_mask,
+            boolean_path=boolean_path,
+            path=coords_path,
+            idx_map=tmp_idx_map
+        )
+
+        # Update other references
+        removed_seams[i] = updated_path
+        removed_seams_mask[updated_path[:, 0], updated_path[:, 1]] = 1
+        gray = cv2.cvtColor(tmp_img.astype(np.uint8), cv2.COLOR_BGR2GRAY)
+
+    # Build the final image by inserting seams
+    final_width = W + num_seams
+    final_img = np.zeros((H, final_width, C), dtype=np.float64)
+
+    # For each row, determine the columns where seams were removed
+    # and then re-insert them by duplicating pixels
+    for h in range(H):
+        # Collect all seam column indices for this row
+        # These are the original columns where seams were removed
+        seam_cols = []
+        for i in range(num_seams):
+            seam_cols.append(removed_seams[i, h, 1])
+        seam_cols = sorted(seam_cols)
+
+        # We'll rebuild this row
+        row_buffer = np.zeros((final_width, C), dtype=np.float64)
         
-    return new_img, new_mask
+        # Indices to track insertion
+        original_col_idx = 0
+        final_col_idx = 0
+        seam_idx = 0  # which seam index we are currently inserting
+
+        while original_col_idx < W:
+            # Copy original pixel to final image
+            row_buffer[final_col_idx, :] = original_img[h, original_col_idx, :]
+
+            # Check if the next seam to insert is at this column
+            if seam_idx < len(seam_cols) and seam_cols[seam_idx] == original_col_idx:
+                # We need to insert a pixel right after this column
+                # Average between current pixel and the next one (or handle boundary)
+                if original_col_idx < W - 1:
+                    new_val = (original_img[h, original_col_idx, :] + original_img[h, original_col_idx + 1, :]) / 2.0
+                else:
+                    # At the right boundary, average with the previous pixel
+                    # This case usually doesn't happen with seam insertion, but just in case:
+                    new_val = (original_img[h, original_col_idx, :] + original_img[h, original_col_idx - 1, :]) / 2.0
+
+                final_col_idx += 1
+                row_buffer[final_col_idx, :] = new_val
+                seam_idx += 1
+
+            original_col_idx += 1
+            final_col_idx += 1
+
+        final_img[h, :, :] = row_buffer
+
+    return final_img.astype(np.uint8), None
+
 
 ########################################
 # ENERGY COMPUTATION
