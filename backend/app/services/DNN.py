@@ -58,10 +58,9 @@ class DNNService:
         # Decode and process the mask
         mask = ImageUtils.decode_base64_image(mask_data)
         mask = cv2.cvtColor(mask, cv2.COLOR_BGR2GRAY)
-        print(f"mask values statistics: {mask.min()}, {mask.max()}")
         mask[mask > 0] = 255
         
         # Process the image using DNN model
         result = process_image(image, mask, self._model, self._device)
         
-        return result 
+        return ImageUtils.encode_image(result) 

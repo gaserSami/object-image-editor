@@ -120,7 +120,7 @@ def _remove_single_seam(img, protect_mask, remove_mask, forward):
     # Return the updated image, masks, and seam path
     return new_imgs[0], new_imgs[1], new_imgs[2], coords_path
 
-def add_seams(img, num_seams=1, protect_mask=None, forward=True):
+def add_seams(img, num_seams=1, protect_mask=None, forward=False):
     """Main function to add seams to enlarge an image."""
     orig_img = img.copy().astype(np.float64)
     H, W = orig_img.shape[:2]

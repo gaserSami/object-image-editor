@@ -1,11 +1,10 @@
 from app.utils.image_utils import ImageUtils
-from app.models.possion_image_editing import poisson_edit
-import numpy as np
+from app.models.possion_editing import poisson_edit
 import cv2
 
 class PoissonService:
     @staticmethod
-    def blend_images(source_data, mask_data, target_data, mood="Max"):
+    def blend_images(source_data, mask_data, target_data, mode="Max"):
         """
         Blend source image into target image using Poisson blending
         
@@ -29,8 +28,8 @@ class PoissonService:
             mask[mask > 0] = 255
         
         try:
-            result = poisson_edit(source, target, mask, mood)
-            return result
+            result = poisson_edit(source, target, mask, mode)
+            return ImageUtils.encode_image(result)
             
         except Exception as e:
             print(f"Error in Poisson blending: {str(e)}")

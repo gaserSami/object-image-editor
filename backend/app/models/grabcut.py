@@ -73,10 +73,7 @@ class GrabCutManager:
             try:
                 # Convert mask to uint8
                 mask = np.array(mask, dtype=np.uint8)
-                print(mask.shape)
                 self.mask = mask
-                tempMask = np.where((mask == 1) + (mask == 3), 255, 0).astype('uint8')
-
                 # Initialize GrabCut with mask
                 cv.grabCut(self.img, mask, self.rect, self.bgdModel, self.fgdModel, iter, cv.GC_INIT_WITH_MASK)
             except Exception as e:

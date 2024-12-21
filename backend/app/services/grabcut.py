@@ -1,7 +1,7 @@
 from app.utils.image_utils import ImageUtils
 from app.models.grabcut import GrabCutManager
 
-class ImageService:
+class GrabCutService:
     @staticmethod
     def start_selection(image_data, rect, iter):
         """

@@ -1,5 +1,5 @@
 from app.utils.image_utils import ImageUtils
-from app.models.exempler_inpainting import Inpainter
+from app.models.inpaint import Inpainter
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt

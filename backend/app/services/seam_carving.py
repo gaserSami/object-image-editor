@@ -2,8 +2,6 @@ from app.utils.image_utils import ImageUtils
 import numpy as np
 import cv2 as cv
 from app.models.seam_carving import remove_object, add_seams, remove_seams
-import os
-import imageio.v2 as imageio
 
 class SeamCarverService:
     @staticmethod
@@ -62,7 +60,7 @@ class SeamCarverService:
             # Rotate image back to original orientation
             output = np.rot90(output, -1)
         
-        return output.astype(np.uint8)
+        return ImageUtils.encode_image(output.astype(np.uint8))
 
     @staticmethod
     def remove_object(image_data, object_mask, protect_mask, forward=True, direction="auto"):
@@ -105,4 +103,4 @@ class SeamCarverService:
             direction=direction
         )
         
-        return output.astype(np.uint8)
+        return ImageUtils.encode_image(output.astype(np.uint8))

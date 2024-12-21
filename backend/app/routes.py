@@ -1,9 +1,9 @@
 from flask import request, jsonify
-from app.services.dnn_service import DNNService
-from app.services.inpainting_service import InpaintingService
-from app.services.image_service import ImageService
-from app.services.seam_craver_service import SeamCarverService
-from app.services.poisson_service import PoissonService
+from app.services.DNN import DNNService
+from app.services.inapaint import InpaintingService
+from app.services.grabcut import GrabCutService
+from app.services.seam_carving import SeamCarverService
+from app.services.poisson_editing import PoissonService
 from app.utils.image_utils import ImageUtils
 from app import app
 import traceback
@@ -34,7 +34,7 @@ def select_object():
     data = request.json
         
     try:
-        mask, path = ImageService.start_selection(
+        mask, path = GrabCutService.start_selection(
             image_data=data['image'],
             rect=data['rect'],
             iter=data['iter'],
@@ -66,7 +66,7 @@ def refine_selection():
     data = request.json
         
     try:
-        mask, path = ImageService.refine_selection(
+        mask, path = GrabCutService.refine_selection(
             mask=data['mask'],
             iter=data['iter'],
         )
@@ -87,7 +87,8 @@ def resize_image():
         "image": <image_data>,
         "height": <new_height>,
         "width": <new_width>,
-        "protection": <protection_mask>
+        "protection": <protection_mask>,
+        "forward": <use_forward_energy> (optional, default is False)
     }
     
     Response JSON:
@@ -98,19 +99,19 @@ def resize_image():
     data = request.json
     
     try:
-        result = SeamCarverService.resize_with_mask(
+        encoded_image = SeamCarverService.resize_with_mask(
             image_data=data['image'],
             new_height=data['height'],
             new_width=data['width'],
             protect_mask=data['protection'],
-            forward=data['forward']
+            forward=data.get('forward', False)
         )
         return jsonify({
-                "image": ImageUtils.encode_image(result)
+            "image": encoded_image
         })
     except Exception as e:
         error_trace = traceback.format_exc()
-        logger.error(f"Error in remove_object: {str(e)}\n{error_trace}")
+        logger.error(f"Error in resize_image: {str(e)}\n{error_trace}")
         return jsonify({
             'error': str(e),
             'traceback': error_trace
@@ -125,7 +126,9 @@ def remove_object():
     {
         "image": <image_data>,
         "mask": <object_mask>,
-        "protection": <protection_mask>
+        "protection": <protection_mask>,
+        "forward": <use_forward_energy> (optional, default is False),
+        "direction": <carving_direction> (optional, default is 'vertical')
     }
     
     Response JSON:
@@ -136,16 +139,16 @@ def remove_object():
     data = request.json
     
     try:
-        result = SeamCarverService.remove_object(
+        encoded_image = SeamCarverService.remove_object(
             image_data=data['image'],
             object_mask=data['mask'],
             protect_mask=data['protection'],
-            forward=data['forward'],
-            direction=data['direction']
+            forward=data.get('forward', False),
+            direction=data.get('direction', 'vertical')
         )
         
         return jsonify({
-            "image": ImageUtils.encode_image(result)
+            "image": encoded_image
         })
     except Exception as e:
         error_trace = traceback.format_exc()
@@ -176,15 +179,15 @@ def blend_images():
     data = request.json
     
     try:
-        result = PoissonService.blend_images(
+        encoded_image = PoissonService.blend_images(
             source_data=data['source'],
             mask_data=data['mask'],
             target_data=data['target'],
-            mood=data.get('mood', 'Mix')
+            mode=data.get('mode', 'Mix')
         )
         
         return jsonify({
-            "image": ImageUtils.encode_image(result)
+            "image": encoded_image
         })
     
     except Exception as e:
@@ -254,13 +257,13 @@ def inpaint_dnn():
     try:
         # Get the DNNService instance first
         dnn_service = DNNService.get_instance()
-        result = dnn_service.inpaint_with_dnn(
+        encoded_image = dnn_service.inpaint_with_dnn(
             image_data=data['image'],
             mask_data=data['mask']
         )
         
         return jsonify({
-            "image": ImageUtils.encode_image(result)
+            "image": encoded_image
         })
     
     except Exception as e:

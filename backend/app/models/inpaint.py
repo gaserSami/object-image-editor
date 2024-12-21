@@ -1,6 +1,5 @@
 import numpy as np
 import cv2
-import matplotlib.pyplot as plt
 from scipy.signal import convolve2d
 import time
 import pyopencl as cl
@@ -21,16 +20,6 @@ class Inpainter:
         self.half_size = patch_size // 2
         self.tmp_boundary_confidence = None
 
-        # Performance tracking
-        self.timing_stats = {
-            'compute_fill_front': [],
-            'compute_priorities': [],
-            'find_max_prio_patch': [],
-            'find_exemplar': [],
-            'copy_exemplar_data': [],
-            'update_confidence': []
-        }
-
         # Initialize OpenCL context and compile kernels
         self._init_opencl()
 
@@ -39,33 +28,36 @@ class Inpainter:
         self.ctx = cl.create_some_context()
         self.queue = cl.CommandQueue(self.ctx)
         self.prg = cl.Program(self.ctx, """
+        // Kernel to compute the sum of squared differences (SSD) between patches
         __kernel void compute_ssd(
-            __global const float *image_lab,
-            __global const float *target_patch,
-            __global const float *target_mask,
-            __global float *ssd,
-            const int img_height,
-            const int img_width,
-            const int patch_height,
-            const int patch_width
+            __global const float *image_lab,  // Input image in LAB color space
+            __global const float *target_patch,  // Target patch to compare against
+            __global const float *target_mask,  // Mask for the target patch
+            __global float *ssd,  // Output SSD values
+            const int img_height,  // Height of the image
+            const int img_width,  // Width of the image
+            const int patch_height,  // Height of the patch
+            const int patch_width  // Width of the patch
         ) {
             int gid = get_global_id(0);
             int row = gid / (img_width - patch_width + 1);
             int col = gid % (img_width - patch_width + 1);
             
+            // Return if the row is out of bounds
             if (row >= (img_height - patch_height + 1)) return;
             
             float sum = 0.0f;
             
-            // For each LAB channel
+            // Iterate over each LAB channel
             for (int c = 0; c < 3; c++) {
-                // For each pixel in patch
+                // Iterate over each pixel in the patch
                 for (int i = 0; i < patch_height; i++) {
                     for (int j = 0; j < patch_width; j++) {
                         int img_idx = ((row + i) * img_width + (col + j)) * 3 + c;
                         int patch_idx = (i * patch_width + j) * 3 + c;
                         int mask_idx = i * patch_width + j;
                         
+                        // Calculate the difference and accumulate the squared difference
                         float diff = (image_lab[img_idx] * target_mask[mask_idx] - 
                                     target_patch[patch_idx]);
                         sum += diff * diff;
@@ -73,87 +65,96 @@ class Inpainter:
                 }
             }
             
+            // Store the computed SSD value
             ssd[row * (img_width - patch_width + 1) + col] = sum;
         }
 
+        // Kernel to compute gradients and normals at the boundary
         __kernel void compute_gradients_and_normals(
-            __global const float *image,
-            __global const float *omega,
-            __global float *boundary_gx,
-            __global float *boundary_gy,
-            __global float *boundary_nx,
-            __global float *boundary_ny,
-            __global const char *fill_front,
-            const int height,
-            const int width
+            __global const float *image,  // Input image
+            __global const float *omega,  // Mask indicating inpainting region
+            __global float *boundary_gx,  // Output gradient in x direction
+            __global float *boundary_gy,  // Output gradient in y direction
+            __global float *boundary_nx,  // Output normal in x direction
+            __global float *boundary_ny,  // Output normal in y direction
+            __global const char *fill_front,  // Fill front mask
+            const int height,  // Height of the image
+            const int width  // Width of the image
         ) {
             int gid = get_global_id(0);
             int y = gid / width;
             int x = gid % width;
             
+            // Return if out of bounds or not on the fill front
             if (y >= height || x >= width || fill_front[y * width + x] == 0) return;
             
             float grad_x = 0, grad_y = 0, nx = 0, ny = 0;
             
-            // Compute gradients
+            // Compute gradients in x direction
             if (x + 1 < width && omega[(y * width + (x + 1)) * 3] == 0) {
                 grad_x = image[(y * width + (x + 1)) * 3] - image[(y * width + x) * 3];
             } else if (x - 1 >= 0 && omega[(y * width + (x - 1)) * 3] == 0) {
                 grad_x = image[(y * width + x) * 3] - image[(y * width + (x - 1)) * 3];
             }
             
+            // Compute gradients in y direction
             if (y + 1 < height && omega[((y + 1) * width + x) * 3] == 0) {
                 grad_y = image[((y + 1) * width + x) * 3] - image[(y * width + x) * 3];
             } else if (y - 1 >= 0 && omega[((y - 1) * width + x) * 3] == 0) {
                 grad_y = image[(y * width + x) * 3] - image[((y - 1) * width + x) * 3];
             }
             
-            // Compute normals
+            // Compute normals in x direction
             if (x + 1 < width && omega[(y * width + (x + 1)) * 3] == 1) {
                 nx = omega[(y * width + (x + 1)) * 3] - omega[(y * width + x) * 3];
             } else if (x - 1 >= 0 && omega[(y * width + (x - 1)) * 3] == 1) {
                 nx = omega[(y * width + x) * 3] - omega[(y * width + (x - 1)) * 3];
             }
             
+            // Compute normals in y direction
             if (y + 1 < height && omega[((y + 1) * width + x) * 3] == 1) {
                 ny = omega[((y + 1) * width + x) * 3] - omega[(y * width + x) * 3];
             } else if (y - 1 >= 0 && omega[((y - 1) * width + x) * 3] == 1) {
                 ny = omega[(y * width + x) * 3] - omega[((y - 1) * width + x) * 3];
             }
             
+            // Store computed gradients and normals
             boundary_gx[y * width + x] = grad_x;
             boundary_gy[y * width + x] = grad_y;
             boundary_nx[y * width + x] = nx;
             boundary_ny[y * width + x] = ny;
         }
 
+        // Kernel to update confidence values
         __kernel void update_confidence(
-            __global const float *confidence,
-            __global const float *mask,
-            __global float *output,
-            const int height,
-            const int width,
-            const int patch_size,
-            const int target_row,
-            const int target_col
+            __global const float *confidence,  // Current confidence values
+            __global const float *mask,  // Mask indicating inpainting region
+            __global float *output,  // Output updated confidence values
+            const int height,  // Height of the image
+            const int width,  // Width of the image
+            const int patch_size,  // Size of the patch
+            const int target_row,  // Row of the target patch
+            const int target_col  // Column of the target patch
         ) {
             int gid = get_global_id(0);
             int local_row = gid / patch_size;
             int local_col = gid % patch_size;
             
+            // Return if local coordinates are out of bounds
             if (local_row >= patch_size || local_col >= patch_size) return;
             
             int half_size = patch_size / 2;
             int global_row = target_row - half_size + local_row;
             int global_col = target_col - half_size + local_col;
             
+            // Return if global coordinates are out of bounds
             if (global_row < 0 || global_row >= height || 
                 global_col < 0 || global_col >= width) return;
             
             float sum = 0.0f;
             int count = 0;
             
-            // Compute average confidence in patch
+            // Compute average confidence in the patch
             for (int i = -half_size; i <= half_size; i++) {
                 for (int j = -half_size; j <= half_size; j++) {
                     int r = global_row + i;
@@ -170,7 +171,7 @@ class Inpainter:
             int mask_idx = global_row * width + global_col;
             int out_idx = local_row * patch_size + local_col;
             
-            // Update confidence using mask
+            // Update confidence using the mask
             output[out_idx] = confidence[mask_idx] * mask[mask_idx] + 
                              avg_confidence * (1.0f - mask[mask_idx]);
         }
@@ -178,17 +179,20 @@ class Inpainter:
 
     def initialize(self):
         """Prepare data structures for inpainting"""
-        # binarize the omega_3D
+        
+        # Binarize the omega_3D mask to ensure it's in float64 format
         self.omega_3D = (self.omega_3D > 0).astype(np.float64)
-        # Normalize and convert data types
-        self.omega_3D = self.omega_3D.astype(np.float64)
+        
+        # Create the inverse mask (non-masked areas)
         self.mask_3D = 1 - self.omega_3D
         
-        # Calculate source region (non-masked areas)
+        # Calculate the source region, which is the non-masked area in the first channel
         self.source_region = 1 - self.omega_3D[:, :, 0]
         
-        # Find valid patch centers in source region
+        # Define a kernel for convolution to find valid patch centers
         kernel = np.ones((self.patch_size, self.patch_size))
+        
+        # Convolve the source region with the kernel to find valid patch centers
         self.source_centers = convolve2d(
             self.source_region, 
             kernel, 
@@ -196,22 +200,32 @@ class Inpainter:
             boundary="fill", 
             fillvalue=0
         ) / (self.patch_size**2)
+        
+        # Convert source centers to a boolean array where 1 indicates a valid center
         self.source_centers = (self.source_centers == 1)
         
-        # Initialize image and confidence maps
+        # Initialize the image by applying the mask and converting to float64
         self.image = self.image.astype(np.float64) * self.mask_3D
+        
+        # Initialize priority and confidence maps
         self.priority = np.zeros(self.image.shape[:2], dtype=np.float64)
-        self.confidence = self.mask_3D[:,:,0].copy()
+        self.confidence = self.mask_3D[:, :, 0].copy()
 
     def compute_fill_front(self):
         """
         Compute the fill front (boundary between known and unknown regions)
-        using morphological operations
+        using morphological operations.
         """
+        # Define a kernel for dilation operation
         kernel = np.array([[0, 1, 0],
-                          [1, 1, 1],
-                          [0, 1, 0]], dtype=np.uint8)
-        self.fill_front = cv2.dilate(self.omega_3D[:,:,0], kernel) - self.omega_3D[:,:,0]
+                           [1, 1, 1],
+                           [0, 1, 0]], dtype=np.uint8)
+        
+        # Perform dilation on the omega mask to expand the known region
+        dilated_omega = cv2.dilate(self.omega_3D[:, :, 0], kernel)
+        
+        # Compute the fill front by subtracting the original omega from the dilated version
+        self.fill_front = dilated_omega - self.omega_3D[:, :, 0]
 
     def compute_priorites(self):
         # Get boundary pixels coordinates
@@ -230,11 +244,6 @@ class Inpainter:
         roi_width = max_x - min_x
         
         # Compute confidence term only for ROI
-        # center = self.patch_size // 2
-        # indices = np.arange(self.patch_size)
-        # dist_matrix = np.abs(indices[:, None] - center) + np.abs(indices - center)
-        # dist_matrix = dist_matrix / 6
-        # kernel = dist_matrix
         kernel = np.ones((self.patch_size, self.patch_size))
         
         roi_confidence = self.confidence[min_y:max_y, min_x:max_x]
@@ -296,13 +305,41 @@ class Inpainter:
         self.priority[min_y:max_y, min_x:max_x] = roi_priority
 
     def find_max_prio_patch(self):
-        max_coords = np.unravel_index(np.argmax(self.priority), self.priority.shape)
+        """
+        Find the coordinates of the patch with the maximum priority.
+        
+        Returns:
+            max_coords: Tuple of (row, column) coordinates of the patch with the highest priority.
+        """
+        # Find the index of the maximum priority value
+        max_index = np.argmax(self.priority)
+        
+        # Convert the flat index to 2D coordinates
+        max_coords = np.unravel_index(max_index, self.priority.shape)
+        
         return max_coords
 
     def find_exemplar(self, target_patch, target_mask_patch, target_coords):
+        """
+        Find the exemplar patch with the minimum SSD (Sum of Squared Differences).
+        
+        Args:
+            target_patch: The patch to be inpainted.
+            target_mask_patch: The mask for the target patch.
+            target_coords: Coordinates of the target patch.
+        
+        Returns:
+            min_coords: Tuple of (row, column) coordinates of the exemplar patch.
+        """
+        # Compute the SSD between the target patch and all possible source patches
         ssd = self.SSD(target_patch, target_mask_patch, target_coords)
+        
+        # Set SSD to infinity for invalid source centers
         ssd[self.source_centers == 0] = np.inf
+        
+        # Find the coordinates of the minimum SSD value
         min_coords = np.unravel_index(np.argmin(ssd), ssd.shape)
+        
         return min_coords
 
     def SSD(self, target_patch, target_mask, target_coords):
@@ -360,77 +397,119 @@ class Inpainter:
         return padded_ssd
 
     def copy_exemplar_data(self, target_patch, target_mask_patch, target_coords, source_coords):
-        # paste only in the omega region in the mask_patch
+        """
+        Copy data from the exemplar patch to the target patch location.
+        
+        Args:
+            target_patch: The patch to be inpainted.
+            target_mask_patch: The mask for the target patch.
+            target_coords: Coordinates of the target patch.
+            source_coords: Coordinates of the exemplar patch.
+        """
+        # Calculate half the patch size for indexing
         half_patch_size = self.patch_size // 2
+        
+        # Extract the source patch from the image using source coordinates
         source_row, source_col = source_coords
-        source_patch = self.image[-half_patch_size + source_row:half_patch_size + source_row + 1, -half_patch_size + source_col:half_patch_size + source_col + 1]
+        source_patch = self.image[
+            -half_patch_size + source_row:half_patch_size + source_row + 1, 
+            -half_patch_size + source_col:half_patch_size + source_col + 1
+        ]
+        
+        # Create a new patch by combining the target and source patches using the mask
         new_patch = target_patch * target_mask_patch + source_patch * (1 - target_mask_patch)
+        
+        # Place the new patch into the target location in the image
         target_row, target_col = target_coords
-        self.image[-half_patch_size + target_row:half_patch_size + target_row + 1, -half_patch_size + target_col:half_patch_size + target_col + 1] = new_patch
-        self.omega_3D[-half_patch_size + target_row:half_patch_size + target_row + 1, -half_patch_size + target_col:half_patch_size + target_col + 1] = 0
+        self.image[
+            -half_patch_size + target_row:half_patch_size + target_row + 1, 
+            -half_patch_size + target_col:half_patch_size + target_col + 1
+        ] = new_patch
+        
+        # Update the omega mask to indicate the region has been filled
+        self.omega_3D[
+            -half_patch_size + target_row:half_patch_size + target_row + 1, 
+            -half_patch_size + target_col:half_patch_size + target_col + 1
+        ] = 0
+        
+        # Update the inverse mask
         self.mask_3D = 1 - self.omega_3D
 
     def update_confidence(self, target_coords, target_mask_patch):
+        """
+        Update the confidence values for the target patch area.
+        
+        Args:
+            target_coords: Coordinates of the target patch.
+            target_mask_patch: The mask for the target patch.
+        """
+        # Extract target row and column from coordinates
         target_row, target_col = target_coords
+        
+        # Retrieve the new confidence value from the temporary boundary confidence map
         new_confidence = self.tmp_boundary_confidence[target_row, target_col]
-        new_confidence_patch = self.confidence[target_row - self.half_size:target_row + self.half_size + 1, target_col - self.half_size:target_col + self.half_size + 1]
-        new_confidence_patch = new_confidence_patch * target_mask_patch[:,:,0] + new_confidence * (1 - target_mask_patch[:,:,0])
-        self.confidence[target_row - self.half_size:target_row + self.half_size + 1, target_col - self.half_size:target_col + self.half_size + 1] = new_confidence_patch
+        
+        # Extract the current confidence patch from the confidence map
+        new_confidence_patch = self.confidence[
+            target_row - self.half_size:target_row + self.half_size + 1, 
+            target_col - self.half_size:target_col + self.half_size + 1
+        ]
+        
+        # Update the confidence patch using the target mask
+        new_confidence_patch = (
+            new_confidence_patch * target_mask_patch[:, :, 0] + 
+            new_confidence * (1 - target_mask_patch[:, :, 0])
+        )
+        
+        # Place the updated confidence patch back into the confidence map
+        self.confidence[
+            target_row - self.half_size:target_row + self.half_size + 1, 
+            target_col - self.half_size:target_col + self.half_size + 1
+        ] = new_confidence_patch
 
     def inpaint(self):
-        to_save_after_each = 25
-        i = 0
-        start_time = time.time()
+        """
+        Perform the inpainting process on the image.
+        """
+        # Continue inpainting while there are regions to fill
         while np.any(self.omega_3D):
-            # DEBUGGING: TO REMOVE
-            t0 = time.time()
+            # Compute the fill front (boundary of the inpainting region)
             self.compute_fill_front()
-            self.timing_stats['compute_fill_front'].append(time.time() - t0)
 
-            t0 = time.time()
+            # Compute priorities for the fill front
             self.compute_priorites()
-            self.timing_stats['compute_priorities'].append(time.time() - t0)
 
-            t0 = time.time()
+            # Find the patch with the maximum priority
             target_coords = self.find_max_prio_patch()
-            self.timing_stats['find_max_prio_patch'].append(time.time() - t0)
 
+            # Extract the target patch and its mask
             target_row, target_col = target_coords
-            target_patch = self.image[-self.half_size + target_row:self.half_size + target_row + 1, -self.half_size + target_col:self.half_size + target_col + 1]
-            target_mask_patch = self.mask_3D[-self.half_size + target_row:self.half_size + target_row + 1, -self.half_size + target_col:self.half_size + target_col + 1]
+            target_patch = self.image[
+                -self.half_size + target_row:self.half_size + target_row + 1, 
+                -self.half_size + target_col:self.half_size + target_col + 1
+            ]
+            target_mask_patch = self.mask_3D[
+                -self.half_size + target_row:self.half_size + target_row + 1, 
+                -self.half_size + target_col:self.half_size + target_col + 1
+            ]
 
-            t0 = time.time()
-            source_coords = self.find_exemplar(target_patch=target_patch, target_mask_patch=target_mask_patch, target_coords=target_coords)
-            self.timing_stats['find_exemplar'].append(time.time() - t0)
+            # Find the exemplar patch with the minimum SSD
+            source_coords = self.find_exemplar(
+                target_patch=target_patch, 
+                target_mask_patch=target_mask_patch, 
+                target_coords=target_coords
+            )
 
-            t0 = time.time()
-            self.copy_exemplar_data(target_patch=target_patch, target_mask_patch=target_mask_patch, target_coords=target_coords, source_coords=source_coords)
-            self.timing_stats['copy_exemplar_data'].append(time.time() - t0)
+            # Copy data from the exemplar patch to the target patch
+            self.copy_exemplar_data(
+                target_patch=target_patch, 
+                target_mask_patch=target_mask_patch, 
+                target_coords=target_coords, 
+                source_coords=source_coords
+            )
 
-            t0 = time.time()
-            self.update_confidence(target_coords=target_coords, target_mask_patch=target_mask_patch)
-            self.timing_stats['update_confidence'].append(time.time() - t0)
-
-            i += 1
-            if i % to_save_after_each == 0:
-                cv2.imwrite(f"tmp/inpainted_image_{i}.jpg", (self.image).astype(np.uint8))
-                # Print timing statistics every N iterations
-                print(f"\nTiming stats after {i} iterations:")
-                for func, times in self.timing_stats.items():
-                    avg_time = sum(times[-to_save_after_each:]) / min(to_save_after_each, len(times))
-                    print(f"{func}: {avg_time:.4f}s per iteration")
-
-        cv2.imwrite(f"tmp/inpainted_image_final.jpg", (self.image).astype(np.uint8))
-        end_time = time.time()
-        print(f"\nTotal time taken for inpainting: {end_time - start_time:.2f} seconds")
-        
-        # Print final statistics
-        print("\nFinal timing statistics:")
-        for func, times in self.timing_stats.items():
-            avg_time = sum(times) / len(times)
-            total_time = sum(times)
-            percentage = (total_time / (end_time - start_time)) * 100
-            print(f"{func}:")
-            print(f"  Average time: {avg_time:.4f}s")
-            print(f"  Total time: {total_time:.2f}s")
-            print(f"  Percentage of total: {percentage:.1f}%")
+            # Update the confidence map for the target patch
+            self.update_confidence(
+                target_coords=target_coords, 
+                target_mask_patch=target_mask_patch
+            )
